@@ -4,109 +4,92 @@ import folium
 from streamlit_folium import st_folium
 import re
 import google.generativeai as genai
+from google.generativeai.types import RequestOptions
 
 # --- CẤU HÌNH GEMINI AI ---
-# Sử dụng API Key của bạn
+# Sử dụng API Key đã xác thực của cậu
 genai.configure(api_key="AIzaSyAMAVgxsEGeHeC9WxINnR3NZOVlRQ1llrQ")
 
-# Khởi tạo model với đường dẫn đầy đủ để tránh lỗi 404
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+# Thiết lập Model với cấu hình tối ưu
+model = genai.GenerativeModel(
+    model_name='gemini-1.5-flash',
+    generation_config={
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": 64,
+        "max_output_tokens": 1024,
+    }
+)
 
+# Hàm gọi AI có ép phiên bản API v1 để tránh lỗi 404
+def get_ai_rescue_advice(lat, lon, velocity, time_lost, radius):
+    prompt = f"""
+    Bạn là một sĩ quan chỉ huy cứu hộ hàng hải cao cấp. 
+    Dữ liệu thực tế từ thiết bị của nạn nhân:
+    - Tọa độ cuối cùng: {lat}, {lon}
+    - Vận tốc di chuyển: {velocity} km/h
+    - Thời gian mất tín hiệu: {time_lost} phút
+    - Vùng tìm kiếm dự kiến: bán kính {radius:.1f} mét.
+
+    Hãy thực hiện:
+    1. Đánh giá mức độ nguy hiểm (Thấp/Trung bình/Cao).
+    2. Đưa ra 3 hành động khẩn cấp cho đội cứu hộ.
+    3. Dự đoán rủi ro sức khỏe (hạ thân nhiệt, trôi dạt...).
+    Trả lời ngắn gọn, chuyên nghiệp bằng tiếng Việt.
+    """
+    try:
+        # Ép sử dụng api_version='v1' để sửa lỗi 404 models/not found
+        response = model.generate_content(
+            prompt, 
+            request_options=RequestOptions(api_version='v1')
+        )
+        return response.text
+    except Exception as e:
+        return f"Lỗi kết nối AI: {e}. Vui lòng kiểm tra lại cấu hình phiên bản API."
+
+# --- GIAO DIỆN WEB ---
 st.set_page_config(page_title="AI Rescue System", layout="wide")
-
 st.title("🚢 Hệ thống Giám sát & Dự đoán Cứu hộ AI")
 st.markdown("---")
 
-# Tải lên file Excel trực tiếp (Trip Report)
 uploaded_file = st.file_uploader("Tải lên file Trip Report (Excel)", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
-    # Đọc dữ liệu từ Excel
     df = pd.read_excel(uploaded_file)
     
-    # Hàm tách tọa độ từ chuỗi văn bản
     def extract_coords(text):
         try:
             numbers = re.findall(r"[-+]?\d*\.\d+|\d+", str(text))
             return float(numbers[0]), float(numbers[1])
-        except:
-            return None, None
+        except: return None, None
 
-    # Lấy dữ liệu dòng mới nhất (Dòng đầu tiên trong file của bạn)
+    # Lấy dữ liệu từ dòng đầu tiên
     latest = df.iloc[0]
-    
-    # Trích xuất Lat/Lon từ cột số 5 (Start) và Vận tốc từ cột số 9 (Average velocity)
     lat, lon = extract_coords(latest.iloc[5]) 
     velocity_str = str(latest.iloc[9])
     velocity_match = re.findall(r"[-+]?\d*\.\d+|\d+", velocity_str)
     velocity = float(velocity_match[0]) if velocity_match else 0.0
 
-    # Thiết lập giao diện Sidebar
+    # Sidebar thông số
     st.sidebar.header("📊 Thông số thực tế")
-    st.sidebar.metric("Vận tốc cuối cùng", f"{velocity} km/h")
-    
-    # Thanh trượt giả định thời gian mất tích để AI tính toán vùng tìm kiếm
+    st.sidebar.metric("Vận tốc cuối", f"{velocity} km/h")
     time_lost = st.sidebar.slider("Thời gian mất tín hiệu (phút)", 0, 120, 30)
-    
-    # Công thức tính bán kính vùng tìm kiếm (Vận tốc * thời gian)
     radius = (velocity / 60) * time_lost * 1000 
 
-    # --- PHẦN PHÂN TÍCH AI GEMINI ---
+    # --- NÚT BẤM GỌI AI ---
     st.subheader("🤖 Chuyên gia cứu hộ AI phân tích")
     if st.button("Nhấn để Gemini đưa ra lời khuyên cứu hộ"):
-        with st.spinner('Đang kết nối với trí tuệ nhân tạo Gemini...'):
-            prompt = f"""
-            Bạn là một sĩ quan chỉ huy cứu hộ hàng hải cao cấp. 
-            Dữ liệu thực tế từ thiết bị của nạn nhân:
-            - Tọa độ cuối cùng ghi nhận: {lat}, {lon}
-            - Vận tốc di chuyển trước khi mất tín hiệu: {velocity} km/h
-            - Thời gian đã trôi qua kể từ khi mất tích: {time_lost} phút
-            - Vùng tìm kiếm dự kiến: bán kính khoảng {radius:.1f} mét xung quanh tọa độ cuối.
+        with st.spinner('Gemini đang phân tích dữ liệu...'):
+            advice = get_ai_rescue_advice(lat, lon, velocity, time_lost, radius)
+            st.info(advice)
 
-            Dựa trên dữ liệu này, hãy thực hiện:
-            1. Đánh giá mức độ nguy hiểm đối với nạn nhân (Thấp/Trung bình/Cao).
-            2. Đưa ra 3 hành động khẩn cấp ưu tiên cho đội cứu hộ.
-            3. Dự đoán các rủi ro sức khỏe nạn nhân có thể gặp phải (hạ thân nhiệt, kiệt sức...).
-            4. Lời khuyên về hướng tiếp cận dựa trên vị trí tọa độ.
-
-            Yêu cầu: Trả lời bằng tiếng Việt, ngôn ngữ chuyên nghiệp, ngắn gọn và quyết đoán.
-            """
-            try:
-                response = model.generate_content(prompt)
-                st.success("AI đã phân tích xong tình huống!")
-                st.info(response.text)
-            except Exception as e:
-                st.error(f"Lỗi kết nối AI: {e}. Vui lòng kiểm tra lại cấu hình model.")
-
-    # --- PHẦN BẢN ĐỒ ---
+    # --- BẢN ĐỒ ---
     st.divider()
     st.subheader(f"📍 Bản đồ vùng tìm kiếm dự kiến")
-    st.write(f"Tọa độ tâm điểm: **{lat}, {lon}** | Bán kính quét: **{radius:.1f} mét**")
-    
-    # Khởi tạo bản đồ Folium
     m = folium.Map(location=[lat, lon], zoom_start=15)
-    
-    # Đánh dấu vị trí cuối cùng
-    folium.Marker(
-        [lat, lon], 
-        popup="Vị trí cuối ghi nhận", 
-        icon=folium.Icon(color='red', icon='warning', prefix='fa')
-    ).add_to(m)
-    
-    # Vẽ vòng tròn dự đoán AI (vùng tìm kiếm)
-    folium.Circle(
-        [lat, lon], 
-        radius=radius, 
-        color="red", 
-        fill=True, 
-        fill_opacity=0.2,
-        popup="Vùng khả nghi theo vận tốc dạt"
-    ).add_to(m)
-    
-    # Hiển thị bản đồ lên Web
-    st_folium(m, width="100%", height=550)
-    
-    st.caption("Lưu ý: Vùng đỏ thể hiện phạm vi di chuyển tối đa dựa trên vận tốc ghi nhận cuối cùng.")
+    folium.Marker([lat, lon], popup="Nạn nhân", icon=folium.Icon(color='red', icon='warning')).add_to(m)
+    folium.Circle([lat, lon], radius=radius, color="red", fill=True, fill_opacity=0.2).add_to(m)
+    st_folium(m, width="100%", height=500)
 
 else:
-    st.warning("👈 Vui lòng tải file Excel 'Trip Report' lên từ thanh bên trái để bắt đầu.")
+    st.warning("👈 Vui lòng tải file Excel lên để bắt đầu.")
