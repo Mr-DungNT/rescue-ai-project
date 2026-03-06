@@ -5,11 +5,19 @@ from streamlit_folium import st_folium
 import re
 import google.generativeai as genai
 
-# --- CẤU HÌNH GEMINI AI (BẢN ĐƠN GIẢN HÓA ĐỂ TRÁNH LỖI) ---
-genai.configure(api_key="AIzaSyAMAVgxsEGeHeC9WxINnR3NZOVlRQ1llrQ")
+# --- CẤU HÌNH GEMINI AI (BẢN FIX LỖI 404 & VERSION) ---
+genai.configure(api_key="AIzaSyD0SwH5WRsfbpJqK-y32vtFKZe_vjzgJb4")
 
-# Khởi tạo model theo cách tương thích rộng nhất
-model = genai.GenerativeModel('gemini-1.5-flash')
+def call_gemini(prompt):
+    # Thử danh sách các tên model từ mới đến cũ để tránh lỗi 404
+    for model_name in ['gemini-1.5-flash', 'models/gemini-1.5-flash', 'gemini-pro']:
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception:
+            continue
+    return "Không thể kết nối với các phiên bản AI. Cậu hãy kiểm tra lại kết nối mạng hoặc Reboot App."
 
 # --- GIAO DIỆN WEB ---
 st.set_page_config(page_title="AI Rescue System", layout="wide")
@@ -27,7 +35,7 @@ if uploaded_file is not None:
             return float(numbers[0]), float(numbers[1])
         except: return None, None
 
-    # Lấy dữ liệu dòng mới nhất
+    # Lấy dữ liệu dòng đầu tiên
     latest = df.iloc[0]
     lat, lon = extract_coords(latest.iloc[5]) 
     velocity_str = str(latest.iloc[9])
@@ -40,36 +48,19 @@ if uploaded_file is not None:
     time_lost = st.sidebar.slider("Thời gian mất tín hiệu (phút)", 0, 120, 30)
     radius = (velocity / 60) * time_lost * 1000 
 
-    # --- PHẦN PHÂN TÍCH AI GEMINI ---
+    # --- NÚT BẤM GỌI AI ---
     st.subheader("🤖 Chuyên gia cứu hộ AI phân tích")
     if st.button("Nhấn để Gemini đưa ra lời khuyên cứu hộ"):
-        with st.spinner('Đang kết nối với trí tuệ nhân tạo...'):
-            prompt = f"""
-            Bạn là một sĩ quan chỉ huy cứu hộ hàng hải cao cấp. 
-            Dữ liệu: Tọa độ {lat}, {lon}, vận tốc {velocity} km/h, bán kính tìm kiếm {radius:.1f}m.
-            Hãy: 
-            1. Đánh giá mức độ nguy hiểm.
-            2. Đưa ra 3 hành động khẩn cấp.
-            Trả lời ngắn gọn bằng tiếng Việt.
-            """
-            try:
-                # Dùng lệnh cơ bản nhất để tránh lỗi version
-                response = model.generate_content(prompt)
-                st.info(response.text)
-            except Exception as e:
-                # Nếu vẫn lỗi 404, thử đổi sang tên model đầy đủ
-                try:
-                    alt_model = genai.GenerativeModel('models/gemini-1.5-flash')
-                    response = alt_model.generate_content(prompt)
-                    st.info(response.text)
-                except:
-                    st.error(f"Lỗi kết nối AI: {e}. Cậu hãy kiểm tra lại xem đã nhấn 'Reboot App' chưa.")
+        with st.spinner('Gemini đang suy nghĩ...'):
+            prompt = f"Bạn là chuyên gia cứu hộ. Nạn nhân ở {lat}, {lon}, vận tốc {velocity}km/h, vùng tìm kiếm {radius}m. Đưa ra 3 lời khuyên ngắn gọn bằng tiếng Việt."
+            advice = call_gemini(prompt)
+            st.info(advice)
 
     # --- BẢN ĐỒ ---
     st.divider()
-    st.subheader(f"📍 Bản đồ vùng tìm kiếm dự kiến")
+    st.subheader(f"📍 Bản đồ vùng dự kiến")
     m = folium.Map(location=[lat, lon], zoom_start=15)
-    folium.Marker([lat, lon], popup="Nạn nhân", icon=folium.Icon(color='red', icon='warning')).add_to(m)
+    folium.Marker([lat, lon], icon=folium.Icon(color='red', icon='warning')).add_to(m)
     folium.Circle([lat, lon], radius=radius, color="red", fill=True, fill_opacity=0.2).add_to(m)
     st_folium(m, width="100%", height=500)
 
