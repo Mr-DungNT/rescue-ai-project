@@ -6,74 +6,57 @@ import re
 
 st.set_page_config(page_title="AI Rescue System", layout="wide")
 
-st.title("🚢 Hệ thống Dự đoán Cứu hộ AI")
-st.markdown("---")
+st.title("🚢 Hệ thống Giám sát & Dự đoán Cứu hộ AI")
 
-# 1. Chức năng Upload file trực tiếp lên Web
-uploaded_file = st.file_uploader("Tải lên file Trip Report (CSV)", type="csv")
+# CHỖ NÀY ĐÃ ĐỔI SANG EXCEL
+uploaded_file = st.file_uploader("Tải lên file Trip Report (Excel)", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
-    # Đọc dữ liệu và bỏ qua các dòng tiêu đề thừa nếu có
-    df = pd.read_csv(uploaded_file)
+    # ĐỌC FILE EXCEL
+    df = pd.read_excel(uploaded_file)
     
-    # Hàm xử lý chuỗi tọa độ "21.xxx, 105.xxx" thành số thực
     def extract_coords(text):
         try:
-            # Tìm tất cả số thực trong chuỗi
             numbers = re.findall(r"[-+]?\d*\.\d+|\d+", str(text))
             return float(numbers[0]), float(numbers[1])
-        except:
-            return None, None
+        except: return None, None
 
-    # Lấy dữ liệu dòng mới nhất (Dòng đầu tiên trong file của cậu)
-    latest_data = df.iloc[0]
+    # Lấy dòng mới nhất (Dòng đầu tiên sau tiêu đề)
+    latest = df.iloc[0]
     
-    # Trích xuất tọa độ và vận tốc
-    start_lat, start_lon = extract_coords(latest_data.iloc[5]) # Cột Start Coord
-    end_lat, end_lon = extract_coords(latest_data.iloc[6])     # Cột End Coord
+    # Dựa trên file của cậu: Cột số 5 là Start, Cột số 9 là Velocity
+    lat, lon = extract_coords(latest.iloc[5]) 
+    velocity_val = str(latest.iloc[9])
+    velocity = float(re.findall(r"[-+]?\d*\.\d+|\d+", velocity_val)[0])
+
+    # Hiển thị thông số trên thanh bên
+    st.sidebar.header("Thông số thực tế")
+    st.sidebar.metric("Vận tốc cuối", f"{velocity} km/h")
     
-    # Xử lý vận tốc (Xóa chữ 'km/h' để lấy số)
-    velocity_str = str(latest_data.iloc[9])
-    velocity = float(re.findall(r"[-+]?\d*\.\d+|\d+", velocity_str)[0])
+    # Thanh trượt AI
+    time_lost = st.sidebar.slider("Thời gian mất tín hiệu (phút)", 0, 120, 30)
+    # Công thức dự đoán vùng tìm kiếm
+    radius = (velocity / 60) * time_lost * 1000 
 
-    # 2. Giao diện hiển thị chỉ số
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Vị trí cuối cùng", f"{end_lat}, {end_lon}")
-    col2.metric("Vận tốc cuối", f"{velocity} km/h")
+    # Vẽ bản đồ
+    st.subheader(f"Vị trí cuối ghi nhận: {lat}, {lon}")
+    m = folium.Map(location=[lat, lon], zoom_start=15)
     
-    # 3. Thuật toán AI dự đoán vùng tìm kiếm
-    st.sidebar.header("Cấu hình Dự đoán AI")
-    time_lost = st.sidebar.slider("Thời gian mất liên lạc (phút)", 5, 120, 30)
+    # Vị trí cuối
+    folium.Marker([lat, lon], popup="Nạn nhân", icon=folium.Icon(color='red', icon='user')).add_to(m)
     
-    # Tính bán kính dự đoán: R = (Vận tốc / 60) * Thời gian
-    # Đổi sang mét để vẽ vòng tròn
-    predict_radius = (velocity / 60) * time_lost * 1000 
-
-    # 4. Vẽ bản đồ
-    st.subheader("Bản đồ cứu hộ trực tuyến")
-    m = folium.Map(location=[end_lat, end_lon], zoom_start=15)
-
-    # Đánh dấu vị trí cuối cùng
-    folium.Marker(
-        [end_lat, end_lon], 
-        popup="Vị trí cuối cùng còn tín hiệu",
-        icon=folium.Icon(color='red', icon='info-sign')
-    ).add_to(m)
-
-    # Vẽ vòng tròn dự đoán của AI (Vùng tìm kiếm)
+    # Vùng dự đoán AI
     folium.Circle(
-        location=[end_lat, end_lon],
-        radius=predict_radius,
-        color="crimson",
-        fill=True,
-        fill_color="red",
-        fill_opacity=0.3,
-        popup=f"Vùng tìm kiếm sau {time_lost} phút"
+        [lat, lon], 
+        radius=radius, 
+        color="red", 
+        fill=True, 
+        fill_opacity=0.2,
+        popup="Vùng tìm kiếm khả thi"
     ).add_to(m)
-
-    # Hiển thị bản đồ
-    st_folium(m, width="100%", height=500)
     
-    st.success(f"AI xác định vùng tìm kiếm có bán kính: {predict_radius:.2f} mét")
+    st_folium(m, width="100%", height=500)
+    st.info(f"Dựa trên vận tốc {velocity}km/h, vùng tìm kiếm sau {time_lost} phút có bán kính khoảng {radius:.1f} mét.")
+
 else:
-    st.info("Vui lòng tải file dữ liệu lên để bắt đầu phân tích.")
+    st.warning("👈 Cậu hãy chọn file Excel từ máy tính để chạy demo nhé!")
