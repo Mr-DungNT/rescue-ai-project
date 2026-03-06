@@ -3,4 +3,3 @@ pandas
 folium
 streamlit-folium
 openpyxl
-google-generativeai
