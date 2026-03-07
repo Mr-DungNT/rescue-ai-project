@@ -144,4 +144,5 @@ if uploaded_file is not None:
 
 else:
     st.info("👋 Chào mừng cậu! Hãy tải file Excel dữ liệu hành trình lên ở thanh bên trái để AI bắt đầu phân tích vùng cứu hộ.")
-    st.image("https://img.freepik.com/free-vector/modern-world-map-background_1035-18967.jpg", use_column_width=True)
+    # st.image("https://img.freepik.com/free-vector/modern-world-map-background_1035-18967.jpg", use_column_width=True)
+st.image("https://images.unsplash.com/photo-1569263979104-865ab7cd8d13?q=80&w=1000", caption="Hệ thống trực chiến 24/7", use_column_width=True)
