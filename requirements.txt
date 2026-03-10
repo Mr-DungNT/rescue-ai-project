@@ -3,3 +3,4 @@ pandas
 folium
 streamlit-folium
 openpyxl
+requests
