@@ -145,4 +145,4 @@ if uploaded_file is not None:
 else:
     st.info("👋 Chào mừng cậu! Hãy tải file Excel dữ liệu hành trình lên ở thanh bên trái để AI bắt đầu phân tích vùng cứu hộ.")
     # st.image("https://img.freepik.com/free-vector/modern-world-map-background_1035-18967.jpg", use_column_width=True)
-st.image("https://www.vietnamplus.vn/mua-lu-ngap-lut-han-han-hoanh-hanh-tai-nhieu-khu-vuc-tren-the-gioi-post888450.png", caption="Hệ thống trực chiến 24/7", use_column_width=True)
+st.image("https://www.vietnamplus.vn/mua-lu-ngap-lut-han-han-hoanh-hanh-tai-nhieu-khu-vuc-tren-the-gioi-post888450.vnp", caption="Hệ thống trực chiến 24/7", use_column_width=True)
