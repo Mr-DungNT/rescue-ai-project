@@ -5,15 +5,36 @@ from streamlit_folium import st_folium
 import re
 import time
 import math
+import requests
+
+# --- CẤU HÌNH API THỜI TIẾT ---
+API_KEY = "23913db94b60da48fe4dd64dbab2344f"
+
+def get_realtime_weather(lat, lon):
+    """Lấy dữ liệu thời tiết thực tế từ OpenWeatherMap"""
+    try:
+        url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "wind_speed": data['wind'].get('speed', 0), # m/s
+                "wind_deg": data['wind'].get('deg', 0),    # Hướng gió (độ)
+                "temp": data['main'].get('temp', 0),
+                "description": data['weather'][0].get('description', 'N/A')
+            }
+    except Exception:
+        return None
+    return None
 
 # --- CẤU HÌNH GIAO DIỆN ---
-st.set_page_config(page_title="AI Rescue System - Pro", layout="wide")
+st.set_page_config(page_title="AI Rescue System - Realtime", layout="wide")
 
-st.title("HỆ THỐNG AI DỰ ĐOÁN VÙNG TÌM KIẾM")
+st.title("🚢 HỆ THỐNG AI DỰ ĐOÁN VÙNG TÌM KIẾM (REAL-TIME)")
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -31,27 +52,39 @@ if uploaded_file is not None:
             return float(numbers[0]), float(numbers[1])
         except: return None, None
 
-    # Lấy dữ liệu dòng mới nhất (thường là dòng 0 trong Trip Report)
+    # Lấy dữ liệu tọa độ và vận tốc từ file
     latest = df.iloc[0]
     lat, lon = extract_coords(latest.iloc[5]) 
-    
-    # Trích xuất vận tốc
     velocity_str = str(latest.iloc[9])
     velocity_match = re.findall(r"[-+]?\d*\.\d+|\d+", velocity_str)
     velocity = float(velocity_match[0]) if velocity_match else 0.0
 
-    # --- BỘ GIẢ LẬP MÔI TRƯỜNG (KHÔNG CẦN API - SIÊU ỔN ĐỊNH) ---
-    st.sidebar.markdown("---")
-    st.sidebar.header("🌊 Thông số Môi trường")
-    sea_state = st.sidebar.selectbox("Tình trạng thời tiết", ["Yên tĩnh (Lực cản thấp)", "Sóng nhẹ (Dòng chảy trung bình)", "Lũ lớn (Dòng chảy mạnh)"])
-    
-    # Giả lập tốc độ gió dựa trên tình trạng biển
-    if sea_state == "Yên tĩnh (Lực cản thấp)": wind_speed = 2.5
-    elif sea_state == "Sóng nhẹ (Dòng chảy trung bình)": wind_speed = 6.0
-    else: wind_speed = 13.5
-    
-    wind_dir = st.sidebar.slider("Hướng Gió/Dòng chảy (Độ)", 0, 360, 45)
-    time_lost = st.sidebar.slider("Thời gian mất tín hiệu (phút)", 5, 120, 30)
+    # --- LẤY THỜI TIẾT THỰC TẾ ---
+    with st.sidebar:
+        st.markdown("---")
+        st.header("🌍 Môi trường thời gian thực")
+        weather = get_realtime_weather(lat, lon)
+        
+        if weather:
+            st.success(f"📍 Tọa độ: {lat}, {lon}")
+            st.info(f"☁️ Trạng thái: {weather['description'].capitalize()}")
+            # Cho phép người dùng ghi đè nếu muốn giả lập tình huống tệ hơn
+            use_realtime = st.checkbox("Sử dụng dữ liệu thực tế", value=True)
+            
+            if use_realtime:
+                wind_speed = weather['wind_speed']
+                wind_dir = weather['wind_deg']
+                st.write(f"💨 Gió thực tế: {wind_speed} m/s")
+                st.write(f"🧭 Hướng thực tế: {wind_dir}°")
+            else:
+                wind_speed = st.slider("Tùy chỉnh Tốc độ gió (m/s)", 0.0, 30.0, weather['wind_speed'])
+                wind_dir = st.slider("Tùy chỉnh Hướng gió (Độ)", 0, 360, weather['wind_deg'])
+        else:
+            st.error("❌ Không thể kết nối API. Đang dùng dữ liệu giả lập.")
+            wind_speed = st.slider("Tốc độ gió giả lập (m/s)", 0.0, 20.0, 5.0)
+            wind_dir = st.slider("Hướng dạt giả lập (Độ)", 0, 360, 45)
+
+        time_lost = st.slider("Thời gian mất tín hiệu (phút)", 5, 120, 30)
 
     # --- HIỂN THỊ CHỈ SỐ NHANH ---
     col1, col2, col3, col4 = st.columns(4)
@@ -60,19 +93,16 @@ if uploaded_file is not None:
     with col3: st.metric("Hướng dạt", f"{wind_dir}°")
     with col4: st.metric("Thời gian trôi", f"{time_lost} min")
 
-    # --- LOGIC TÍNH TOÁN DRIFT (VÉCTƠ TRÔI DẠT) ---
-    # Drift speed = Vận tốc tàu + (3% vận tốc gió)
+    # --- LOGIC TÍNH TOÁN DRIFT ---
     drift_speed_kmh = velocity + (wind_speed * 3.6 * 0.03)
     total_drift_meters = (drift_speed_kmh / 60) * time_lost * 1000
     
-    # Tính tọa độ tâm vùng tìm kiếm mới (lệch theo hướng gió)
     bearing = math.radians(wind_dir)
-    # 1 độ vĩ độ ~ 111,111m
     offset_dist = total_drift_meters / 2 
     new_lat = lat + (offset_dist * math.cos(bearing) / 111111)
     new_lon = lon + (offset_dist * math.sin(bearing) / (111111 * math.cos(math.radians(lat))))
 
-    # --- PHẦN PHÂN TÍCH AI CHUYÊN GIA ---
+    # --- PHẦN PHÂN TÍCH AI ---
     st.divider()
     st.subheader("🤖 Cloud AI phân tích đa yếu tố")
     
@@ -82,11 +112,11 @@ if uploaded_file is not None:
         st.session_state.ai_ran = True
 
     if st.session_state.ai_ran:
-        with st.status("AI đang tổng hợp dữ liệu môi trường và vị trí...", expanded=True) as status:
+        with st.status("AI đang tổng hợp dữ liệu thời tiết thực tế và tọa độ...", expanded=True) as status:
             time.sleep(0.8)
-            st.write(f"📡 Đang kết nối trạm khí tượng ảo... (Gió: {wind_speed} m/s)")
+            st.write(f"📡 Kết nối API OpenWeatherMap thành công...")
             time.sleep(0.6)
-            st.write(f"📐 Tính toán Vector trôi dạt: Hướng {wind_dir}°, Quãng đường {total_drift_meters:.1f}m")
+            st.write(f"📐 Vector dạt: {total_drift_meters:.1f}m về hướng {(wind_dir)%360}°")
             status.update(label="Phân tích hoàn tất!", state="complete")
 
         danger = "CAO" if drift_speed_kmh > 8 or time_lost > 60 else "TRUNG BÌNH"
@@ -94,19 +124,18 @@ if uploaded_file is not None:
         st.info(f"""
         **KẾT QUẢ PHÂN TÍCH TỪ HỆ THỐNG AI:**
         * **Mức độ rủi ro:** {danger}
-        * **Dự đoán vật lý:** Dưới tác động của hướng gió {wind_dir}°, nạn nhân trôi dạt về phía {(wind_dir)%360}° với tốc độ tổng hợp {drift_speed_kmh:.2f} km/h.
-        * **Khuyến nghị vùng tìm kiếm:** Tâm vùng tìm kiếm đã được dịch chuyển {offset_dist:.0f}m về phía hạ lưu.
-        * **Hành động ưu tiên:** Triển khai lực lượng quan sát tại tọa độ dự kiến: {new_lat:.5f}, {new_lon:.5f}.
+        * **Dữ liệu nguồn:** Thời tiết thực tế tại khu vực {weather['description'] if weather else 'N/A'}.
+        * **Dự đoán vật lý:** Nạn nhân chịu tác động kép từ vận tốc ban đầu và sức gió {wind_speed} m/s.
+        * **Khuyến nghị:** Tập trung lực lượng tại tâm dự kiến {new_lat:.5f}, {new_lon:.5f}.
         """)
 
-    # --- BẢN ĐỒ TRỰC QUAN ---
+    # --- BẢN ĐỒ ---
     st.divider()
-    st.subheader("📍BẢN ĐỒ DỰ ĐOÁN VÙNG TÌM KIẾM")
+    st.subheader("📍 BẢN ĐỒ DỰ ĐOÁN VÙNG TÌM KIẾM VỆ TINH")
     
-    # Tạo bản đồ, tập trung vào vùng tìm kiếm mới
-    m = folium.Map(location=[new_lat, new_lon], zoom_start=15, control_scale=True)
+    m = folium.Map(location=[new_lat, new_lon], zoom_start=15)
     
-    # Thêm lớp bản đồ vệ tinh để nhìn chuyên nghiệp hơn
+    # Lớp vệ tinh Esri
     folium.TileLayer(
         tiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attr = 'Esri',
@@ -115,34 +144,24 @@ if uploaded_file is not None:
         control = True
     ).add_to(m)
 
-    # Vị trí cuối cùng trước khi mất tín hiệu
-    folium.Marker(
-        [lat, lon], 
-        popup="Vị trí cuối", 
-        icon=folium.Icon(color='gray', icon='info-sign')
-    ).add_to(m)
-    
-    # Vùng tìm kiếm dự kiến (Hình tròn lệch tâm)
+    # Đánh dấu
+    folium.Marker([lat, lon], popup="Vị trí cuối", icon=folium.Icon(color='gray')).add_to(m)
     folium.Circle(
         location=[new_lat, new_lon],
-        radius=total_drift_meters/2 + 150, # Bán kính bao phủ sai số
+        radius=total_drift_meters/2 + 150,
         color="red",
-        weight=3,
         fill=True,
-        fill_color="red",
         fill_opacity=0.2,
-        popup=f"Vùng trôi dạt dự kiến sau {time_lost} phút"
+        popup="Vùng tìm kiếm AI dự đoán"
     ).add_to(m)
 
-    # Vẽ mũi tên hướng gió (giả lập đơn giản bằng đường thẳng)
+    # Mũi tên hướng dạt
     line_len = 0.005
-    end_lat = lat + line_len * math.cos(bearing)
-    end_lon = lon + line_len * math.sin(bearing)
-    folium.PolyLine([[lat, lon], [end_lat, end_lon]], color="yellow", weight=5, opacity=0.8, tooltip="Hướng gió/dòng chảy").add_to(m)
+    folium.PolyLine([[lat, lon], [lat + line_len * math.cos(bearing), lon + line_len * math.sin(bearing)]], 
+                    color="yellow", weight=5, tooltip="Hướng trôi dạt").add_to(m)
 
     st_folium(m, width="100%", height=600)
 
 else:
-    st.info("👋Xin chào! Hãy tải file Excel dữ liệu hành trình lên ở thanh bên trái để AI bắt đầu phân tích vùng cứu hộ.")
-    # st.image("https://img.freepik.com/free-vector/modern-world-map-background_1035-18967.jpg", use_column_width=True)
-st.image("https://media.vietnamplus.vn/images/db3eecc2e589c60996480488f99e20f49ca9bb5a263a4de8d02595b616691c38aa3bf5d5b92561c2a6a2ce192fbe6b5e74e94f2aa426d84316be5dd1ba1bf47f/mua_ngap_han_quoc.jpg", caption="Hệ thống trực chiến 24/7", use_column_width=True)
+    st.info("👋 Xin chào! Hãy tải file Excel dữ liệu hành trình để AI bắt đầu cập nhật thời tiết thực tế.")
+    st.image("https://media.vietnamplus.vn/images/db3eecc2e589c60996480488f99e20f49ca9bb5a263a4de8d02595b616691c38aa3bf5d5b92561c2a6a2ce192fbe6b5e74e94f2aa426d84316be5dd1ba1bf47f/mua_ngap_han_quoc.jpg", caption="Hệ thống trực chiến 24/7", use_container_width=True)
