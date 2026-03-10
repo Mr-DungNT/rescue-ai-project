@@ -43,7 +43,7 @@ if uploaded_file is not None:
     # --- BỘ GIẢ LẬP MÔI TRƯỜNG (KHÔNG CẦN API - SIÊU ỔN ĐỊNH) ---
     st.sidebar.markdown("---")
     st.sidebar.header("🌊 Thông số Môi trường")
-    sea_state = st.sidebar.selectbox("Tình trạng biển", ["Yên tĩnh (Lực cản thấp)", "Sóng nhẹ (Dòng chảy trung bình)", "Lũ lớn (Dòng chảy mạnh)"])
+    sea_state = st.sidebar.selectbox("Tình trạng thời tiết", ["Yên tĩnh (Lực cản thấp)", "Sóng nhẹ (Dòng chảy trung bình)", "Lũ lớn (Dòng chảy mạnh)"])
     
     # Giả lập tốc độ gió dựa trên tình trạng biển
     if sea_state == "Yên tĩnh (Lực cản thấp)": wind_speed = 2.5
