@@ -9,7 +9,7 @@ import math
 # --- CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(page_title="AI Rescue System - Pro", layout="wide")
 
-st.title("🚢 Hệ thống Giám sát & Dự đoán Cứu hộ AI (Tích hợp Môi trường)")
+st.title("HỆ THỐNG AI DỰ ĐOÁN VÙNG TÌM KIẾM")
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -43,7 +43,7 @@ if uploaded_file is not None:
     # --- BỘ GIẢ LẬP MÔI TRƯỜNG (KHÔNG CẦN API - SIÊU ỔN ĐỊNH) ---
     st.sidebar.markdown("---")
     st.sidebar.header("🌊 Thông số Môi trường")
-    sea_state = st.sidebar.selectbox("Tình trạng biển", ["Yên tĩnh (Lực cản thấp)", "Sóng nhẹ (Dòng chảy trung bình)", "Biển động (Dòng chảy mạnh)"])
+    sea_state = st.sidebar.selectbox("Tình trạng biển", ["Yên tĩnh (Lực cản thấp)", "Sóng nhẹ (Dòng chảy trung bình)", "Lũ lớn (Dòng chảy mạnh)"])
     
     # Giả lập tốc độ gió dựa trên tình trạng biển
     if sea_state == "Yên tĩnh (Lực cản thấp)": wind_speed = 2.5
@@ -74,7 +74,7 @@ if uploaded_file is not None:
 
     # --- PHẦN PHÂN TÍCH AI CHUYÊN GIA ---
     st.divider()
-    st.subheader("🤖 Chuyên gia cứu hộ AI phân tích đa yếu tố")
+    st.subheader("🤖 Cloud AI phân tích đa yếu tố")
     
     if 'ai_ran' not in st.session_state: st.session_state.ai_ran = False
     
@@ -101,7 +101,7 @@ if uploaded_file is not None:
 
     # --- BẢN ĐỒ TRỰC QUAN ---
     st.divider()
-    st.subheader("📍 Bản đồ Dự đoán vùng trôi dạt (Drift Map)")
+    st.subheader("📍BẢN ĐỒ DỰ ĐOÁN VÙNG TÌM KIẾM")
     
     # Tạo bản đồ, tập trung vào vùng tìm kiếm mới
     m = folium.Map(location=[new_lat, new_lon], zoom_start=15, control_scale=True)
@@ -143,6 +143,6 @@ if uploaded_file is not None:
     st_folium(m, width="100%", height=600)
 
 else:
-    st.info("👋 Chào mừng cậu! Hãy tải file Excel dữ liệu hành trình lên ở thanh bên trái để AI bắt đầu phân tích vùng cứu hộ.")
+    st.info("👋Xin chào! Hãy tải file Excel dữ liệu hành trình lên ở thanh bên trái để AI bắt đầu phân tích vùng cứu hộ.")
     # st.image("https://img.freepik.com/free-vector/modern-world-map-background_1035-18967.jpg", use_column_width=True)
 st.image("https://media.vietnamplus.vn/images/db3eecc2e589c60996480488f99e20f49ca9bb5a263a4de8d02595b616691c38aa3bf5d5b92561c2a6a2ce192fbe6b5e74e94f2aa426d84316be5dd1ba1bf47f/mua_ngap_han_quoc.jpg", caption="Hệ thống trực chiến 24/7", use_column_width=True)
