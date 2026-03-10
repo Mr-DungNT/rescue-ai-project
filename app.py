@@ -22,22 +22,22 @@ def get_realtime_weather(lat, lon):
                 "wind_deg": data['wind'].get('deg', 0),
                 "temp": data['main'].get('temp', 0),
                 "humidity": data['main'].get('humidity', 0),
-                "rain": data.get('rain', {}).get('1h', 0), # Lượng mưa 1h qua
+                "rain": data.get('rain', {}).get('1h', 0),
                 "description": data['weather'][0].get('description', 'N/A'),
-                "visibility": data.get('visibility', 10000) / 1000 # Tầm nhìn (km)
+                "visibility": data.get('visibility', 10000) / 1000
             }
     except Exception:
         return None
     return None
 
 # --- CẤU HÌNH GIAO DIỆN ---
-st.set_page_config(page_title="AI Rescue System - Advanced", layout="wide")
+st.set_page_config(page_title="AI Rescue System - Professional", layout="wide")
 
 st.title("🚢 HỆ THỐNG AI CỨU HỘ TÍCH HỢP DỮ LIỆU THIÊN TAI")
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -66,7 +66,7 @@ if uploaded_file is not None:
     weather = get_realtime_weather(lat, lon)
     
     if weather:
-        st.sidebar.success(f"📍 Tọa độ: {lat}, {lon}")
+        st.sidebar.success(f"📍 Tọa độ hiện tại: {lat}, {lon}")
         st.sidebar.metric("🌡️ Nhiệt độ", f"{weather['temp']}°C")
         st.sidebar.metric("🌧️ Lượng mưa", f"{weather['rain']} mm/h")
         st.sidebar.write(f"👁️ Tầm nhìn: {weather['visibility']} km")
@@ -75,7 +75,7 @@ if uploaded_file is not None:
         wind_speed = weather['wind_speed']
         wind_dir = weather['wind_deg']
     else:
-        st.sidebar.error("⚠️ Đang dùng dữ liệu dự phòng (Kết nối API gián đoạn)")
+        st.sidebar.error("⚠️ Đang dùng dữ liệu dự phòng")
         wind_speed = 5.0
         wind_dir = 45
 
@@ -84,9 +84,9 @@ if uploaded_file is not None:
     # --- HIỂN THỊ CHỈ SỐ NHANH ---
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.metric("Vận tốc tàu cuối", f"{velocity} km/h")
-    with col2: st.metric("Sức gió", f"{wind_speed} m/s")
+    with col2: st.metric("Sức gió thực tế", f"{wind_speed} m/s")
     with col3: st.metric("Nhiệt độ môi trường", f"{weather['temp'] if weather else '--'}°C")
-    with col4: st.metric("Lượng mưa", f"{weather['rain'] if weather else '--'} mm/h")
+    with col4: st.metric("Lượng mưa hiện tại", f"{weather['rain'] if weather else '--'} mm/h")
 
     # --- LOGIC TÍNH TOÁN DRIFT ---
     drift_speed_kmh = velocity + (wind_speed * 3.6 * 0.03)
@@ -96,39 +96,42 @@ if uploaded_file is not None:
     new_lat = lat + (offset_dist * math.cos(bearing) / 111111)
     new_lon = lon + (offset_dist * math.sin(bearing) / (111111 * math.cos(math.radians(lat))))
 
-    # --- PHẦN PHÂN TÍCH AI CHUYÊN SÂU ---
+    # --- PHẦN PHÂN TÍCH AI CHUYÊN SÂU NÂNG CAO ---
     st.divider()
-    st.subheader("🤖 Phân tích AI & Cảnh báo thiên tai")
+    st.subheader("🤖 Phân tích AI & Chiến thuật Cứu hộ chuyên nghiệp")
     
-    if st.button("Kích hoạt AI Phân tích rủi ro"):
+    if st.button("Kích hoạt AI Phân tích rủi ro & Tọa độ"):
         with st.status("Đang quét dữ liệu đa tầng...", expanded=True) as status:
             time.sleep(0.5)
-            st.write("🔍 Đang phân tích lượng mưa và tầm nhìn...")
+            st.write("🛰️ Đang trích xuất tọa độ mục tiêu ưu tiên...")
             time.sleep(0.5)
-            st.write("🌡️ Đang tính toán rủi ro hạ thân nhiệt...")
-            status.update(label="Hoàn tất phân tích!", state="complete")
+            st.write("📊 Đang phân tích rủi ro hạ thân nhiệt (Hypothermia)...")
+            status.update(label="Hoàn tất phân tích chuyên sâu!", state="complete")
 
-        # Logic đánh giá tình trạng thiên tai/nguy hiểm
+        # Logic phân tích
+        water_temp = (weather['temp'] - 2) if weather else 20
+        survival_time = "6-12 giờ" if water_temp > 20 else "2-4 giờ"
         is_heavy_rain = weather['rain'] > 5 if weather else False
-        is_cold = weather['temp'] < 20 if weather else False
-        is_low_visibility = weather['visibility'] < 2 if weather else False
         
-        danger_msg = "🚨 CẢNH BÁO NGUY HIỂM:" if (is_heavy_rain or is_low_visibility) else "✅ ĐIỀU KIỆN ỔN ĐỊNH:"
-        
-        advice = []
-        if is_heavy_rain: advice.append("- Mưa lớn làm giảm hiệu quả radar và tầm nhìn bằng mắt.")
-        if is_low_visibility: advice.append("- Tầm nhìn cực thấp. Cần sử dụng đèn tín hiệu công suất cao.")
-        if is_cold: advice.append("- Cảnh báo: Nguy cơ nạn nhân bị hạ thân nhiệt nhanh (Hypothermia).")
-        if not advice: advice.append("- Điều kiện môi trường thuận lợi cho việc tìm kiếm.")
-
         st.warning(f"""
-        ### {danger_msg}
-        * **Trạng thái:** {weather['description'].capitalize() if weather else 'Không xác định'}
-        * **Phân tích:** Lượng mưa {weather['rain'] if weather else 0}mm/h ảnh hưởng đến khả năng cơ động của cano cứu hộ.
-        * **Vùng tìm kiếm:** Đã dịch chuyển {offset_dist:.0f}m theo hướng {wind_dir}°.
-        * **Khuyến nghị từ AI:**
-        {chr(10).join(advice)}
+        ### 🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN (Priority Search Area):
+        * **Tâm vùng tìm kiếm (Datum):** `{new_lat:.6f}, {new_lon:.6f}`
+        * **Độ lệch dự kiến:** Đã dịch chuyển {offset_dist:.0f}m theo hướng {wind_dir}°.
+        * **Vùng quét an toàn:** Bán kính 500m tính từ tâm tọa độ dự đoán.
+
+        ### 📋 PHÂN TÍCH CHUYÊN MÔN CỨU HỘ:
+        1.  **Khả năng sống sót:** Dưới điều kiện nhiệt độ {weather['temp']}°C, thời gian sống sót ước tính là **{survival_time}**.
+        2.  **Tình trạng thiên tai:** {weather['description'].capitalize()}. { "Mưa lớn gây hạn chế tầm nhìn radar." if is_heavy_rain else "Tầm nhìn khí tượng ổn định." }
+        3.  **Cảnh báo y tế:** Nguy cơ nạn nhân bị hạ thân nhiệt nhanh (Hypothermia).
+        
+        ### 🚤 CHIẾN THUẬT TÌM KIẾM ĐỀ XUẤT:
+        * **Phương pháp:** Tìm kiếm theo hình xoắn ốc mở rộng (Expanding Square Search).
+        * **Ưu tiên:** Triển khai thiết bị tầm nhiệt nếu tìm kiếm vào ban đêm hoặc khi mưa lớn.
         """)
+
+        # Nút copy tọa độ
+        st.code(f"{new_lat:.6f}, {new_lon:.6f}", language="text")
+        st.caption("Sao chép tọa độ trên để nhập vào thiết bị định vị GPS hoặc Google Maps.")
 
     # --- BẢN ĐỒ ---
     st.divider()
@@ -137,13 +140,13 @@ if uploaded_file is not None:
     folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
                      attr='Esri', name='Vệ tinh').add_to(m)
 
-    folium.Marker([lat, lon], popup="Điểm mất dấu", icon=folium.Icon(color='black', icon='off')).add_to(m)
+    folium.Marker([lat, lon], popup="Vị trí cuối", icon=folium.Icon(color='black', icon='off')).add_to(m)
     folium.Circle(location=[new_lat, new_lon], radius=total_drift_meters/2 + 200, 
-                  color="red", fill=True, fill_opacity=0.3, popup="Vùng mục tiêu ưu tiên").add_to(m)
+                  color="red", fill=True, fill_opacity=0.3, popup="Vùng mục tiêu AI dự đoán").add_to(m)
     
-    # Mũi tên hướng gió
+    # Mũi tên hướng dạt
     folium.PolyLine([[lat, lon], [lat + 0.005 * math.cos(bearing), lon + 0.005 * math.sin(bearing)]], 
-                    color="yellow", weight=4).add_to(m)
+                    color="yellow", weight=4, tooltip="Hướng trôi dạt").add_to(m)
 
     st_folium(m, width="100%", height=600)
 
