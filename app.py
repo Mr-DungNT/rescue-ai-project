@@ -7,7 +7,7 @@ import time
 import math
 import requests
 
-# --- CẤU HÌNH API THỜI TIẾT ---
+# API THỜI TIẾT
 API_KEY = "23913db94b60da48fe4dd64dbab2344f"
 
 def get_realtime_weather(lat, lon):
@@ -87,7 +87,7 @@ if uploaded_file is not None:
 
     # --- HIỂN THỊ CHỈ SỐ NHANH ---
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Vận tốc tàu cuối", f"{velocity} km/h")
+    with col1: st.metric("Vận tốc cuối", f"{velocity} km/h")
     with col2: st.metric("Sức gió thực tế", f"{wind_speed} m/s")
     with col3: st.metric("Nhiệt độ môi trường", f"{weather['temp'] if weather else '--'}°C")
     with col4: st.metric("Lượng mưa hiện tại", f"{weather['rain'] if weather else '--'} mm/h")
