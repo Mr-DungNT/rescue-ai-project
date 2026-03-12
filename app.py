@@ -37,7 +37,7 @@ st.set_page_config(page_title="AI Rescue System - Advanced", layout="wide")
 if 'analysis_active' not in st.session_state:
     st.session_state.analysis_active = False
 
-st.title("🚢 HỆ THỐNG AI CỨU HỘ TÍCH HỢP DỮ LIỆU THIÊN TAI")
+st.title("HỆ THỐNG AI DỰ ĐOÁN VÙNG TÌM KIẾM TÍCH HỢP DỮ LIỆU THỜI TIẾT")
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -66,7 +66,7 @@ if uploaded_file is not None:
 
     # --- LẤY THỜI TIẾT THỰC TẾ ---
     st.sidebar.markdown("---")
-    st.sidebar.header("🌍 Chỉ số môi trường thực tế")
+    st.sidebar.header("Dữ liệu môi trường thực tế")
     weather = get_realtime_weather(lat, lon)
     
     if weather:
@@ -102,10 +102,10 @@ if uploaded_file is not None:
 
     # --- PHẦN PHÂN TÍCH AI CHUYÊN SÂU ---
     st.divider()
-    st.subheader("🤖 Phân tích AI & Chiến thuật Cứu hộ chuyên nghiệp")
+    st.subheader("🤖 Phân tích AI & Phương án cứu hộ")
     
     # Nút bấm kích hoạt trạng thái
-    if st.button("Kích hoạt AI Phân tích rủi ro & Tọa độ"):
+    if st.button("Kích hoạt AI phân tích rủi ro & tọa độ"):
         st.session_state.analysis_active = True
         with st.status("Đang quét dữ liệu đa tầng...", expanded=True) as status:
             time.sleep(0.5)
@@ -124,18 +124,18 @@ if uploaded_file is not None:
         danger_msg = "🚨 CẢNH BÁO NGUY HIỂM:" if is_heavy_rain else "✅ ĐIỀU KIỆN ỔN ĐỊNH:"
         
         st.warning(f"""
-        ### 🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN:
+        ### TỌA ĐỘ MỤC TIÊU ƯU TIÊN:
         * **Tâm vùng tìm kiếm (Datum):** `{new_lat:.6f}, {new_lon:.6f}`
         * **Độ lệch dự kiến:** Dịch chuyển {offset_dist:.0f}m về hướng {wind_dir}°.
 
-        ### 📋 PHÂN TÍCH CHUYÊN MÔN:
+        ### PHÂN TÍCH CHUYÊN MÔN:
         1. **Thời gian vàng cứu hộ:** Ước tính **{survival_time}** (Dựa trên nhiệt độ {weather['temp']}°C).
         2. **Tình trạng thiên tai:** {weather['description'].capitalize() if weather else 'N/A'}.
         3. **Cảnh báo:** { "Nguy cơ hạ thân nhiệt nhanh." if is_cold else "Nhiệt độ nước ổn định." }
         
-        ### 🚤 CHIẾN THUẬT TÌM KIẾM ĐỀ XUẤT:
+        ### PHƯƠNG PHÁP TÌM KIẾM ĐỀ XUẤT:
         * **Phương pháp:** Tìm kiếm theo hình xoắn ốc mở rộng (Expanding Square Search).
-        * **Hành động:** Triển khai lực lượng quan sát tại tọa độ mục tiêu.
+        * **Hành động:** Triển khai thiết bị tầm nhiệt tại tọa độ mục tiêu.
         """)
         st.code(f"{new_lat:.6f}, {new_lon:.6f}", language="text")
 
