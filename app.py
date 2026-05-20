@@ -7,7 +7,7 @@ import time
 import math
 import requests
 
-# API THỜI TIẾT
+# --- CẤU HÌNH API THỜI TIẾT ---
 API_KEY = "23913db94b60da48fe4dd64dbab2344f"
 
 def get_realtime_weather(lat, lon):
@@ -37,7 +37,7 @@ st.set_page_config(page_title="AI Rescue System - Advanced", layout="wide")
 if 'analysis_active' not in st.session_state:
     st.session_state.analysis_active = False
 
-st.title("HỆ THỐNG AI DỰ ĐOÁN VÙNG TÌM KIẾM TÍCH HỢP DỮ LIỆU THỜI TIẾT & ĐỊA HÌNH")
+st.title("🚢 HỆ THỐNG AI CỨU HỘ TÍCH HỢP DỮ LIỆU THIÊN TAI")
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -66,7 +66,7 @@ if uploaded_file is not None:
 
     # --- LẤY THỜI TIẾT THỰC TẾ ---
     st.sidebar.markdown("---")
-    st.sidebar.header("Dữ liệu môi trường thực tế")
+    st.sidebar.header("🌍 Chỉ số môi trường thực tế")
     weather = get_realtime_weather(lat, lon)
     
     if weather:
@@ -87,7 +87,7 @@ if uploaded_file is not None:
 
     # --- HIỂN THỊ CHỈ SỐ NHANH ---
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Vận tốc cuối", f"{velocity} km/h")
+    with col1: st.metric("Vận tốc tàu cuối", f"{velocity} km/h")
     with col2: st.metric("Sức gió thực tế", f"{wind_speed} m/s")
     with col3: st.metric("Nhiệt độ môi trường", f"{weather['temp'] if weather else '--'}°C")
     with col4: st.metric("Lượng mưa hiện tại", f"{weather['rain'] if weather else '--'} mm/h")
@@ -102,10 +102,10 @@ if uploaded_file is not None:
 
     # --- PHẦN PHÂN TÍCH AI CHUYÊN SÂU ---
     st.divider()
-    st.subheader("🤖 Phân tích AI & Phương án cứu hộ")
+    st.subheader("🤖 Phân tích AI & Chiến thuật Cứu hộ chuyên nghiệp")
     
     # Nút bấm kích hoạt trạng thái
-    if st.button("Kích hoạt AI phân tích rủi ro & tọa độ"):
+    if st.button("Kích hoạt AI Phân tích rủi ro & Tọa độ"):
         st.session_state.analysis_active = True
         with st.status("Đang quét dữ liệu đa tầng...", expanded=True) as status:
             time.sleep(0.5)
@@ -124,18 +124,18 @@ if uploaded_file is not None:
         danger_msg = "🚨 CẢNH BÁO NGUY HIỂM:" if is_heavy_rain else "✅ ĐIỀU KIỆN ỔN ĐỊNH:"
         
         st.warning(f"""
-        ### TỌA ĐỘ MỤC TIÊU ƯU TIÊN:
+        ### 🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN:
         * **Tâm vùng tìm kiếm (Datum):** `{new_lat:.6f}, {new_lon:.6f}`
         * **Độ lệch dự kiến:** Dịch chuyển {offset_dist:.0f}m về hướng {wind_dir}°.
 
-        ### PHÂN TÍCH CHUYÊN MÔN:
+        ### 📋 PHÂN TÍCH CHUYÊN MÔN:
         1. **Thời gian vàng cứu hộ:** Ước tính **{survival_time}** (Dựa trên nhiệt độ {weather['temp']}°C).
         2. **Tình trạng thiên tai:** {weather['description'].capitalize() if weather else 'N/A'}.
         3. **Cảnh báo:** { "Nguy cơ hạ thân nhiệt nhanh." if is_cold else "Nhiệt độ nước ổn định." }
         
-        ### PHƯƠNG PHÁP TÌM KIẾM ĐỀ XUẤT:
+        ### 🚤 CHIẾN THUẬT TÌM KIẾM ĐỀ XUẤT:
         * **Phương pháp:** Tìm kiếm theo hình xoắn ốc mở rộng (Expanding Square Search).
-        * **Hành động:** Triển khai thiết bị tầm nhiệt tại tọa độ mục tiêu.
+        * **Hành động:** Triển khai lực lượng quan sát tại tọa độ mục tiêu.
         """)
         st.code(f"{new_lat:.6f}, {new_lon:.6f}", language="text")
 
@@ -157,5 +157,5 @@ if uploaded_file is not None:
     st_folium(m, width="100%", height=600)
 
 else:
-    st.info(" Hãy tải file dữ liệu để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
-    st.image("https://t3.ftcdn.net/jpg/04/13/13/14/360_F_413131424_sVgxKDzWO4iq6hg7Gis1glwgv15ROTB6.jpg", caption="DỰ ÁN NEOSAR", use_container_width=True)
+    st.info("👋 Chào mừng! Hãy tải file Excel để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
+    st.image("https://media.vietnamplus.vn/images/db3eecc2e589c60996480488f99e20f49ca9bb5a263a4de8d02595b616691c38aa3bf5d5b92561c2a6a2ce192fbe6b5e74e94f2aa426d84316be5dd1ba1bf47f/mua_ngap_han_quoc.jpg", caption="Hệ thống trực chiến 24/7", use_container_width=True)
