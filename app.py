@@ -37,7 +37,7 @@ st.set_page_config(page_title="AI Rescue System - Advanced", layout="wide")
 if 'analysis_active' not in st.session_state:
     st.session_state.analysis_active = False
 
-st.title("HỆ THỐNG AI DỰ ĐOÁN VÙNG TÌM KIẾM TÍCH HỢP DỮ LIỆU THỜI TIẾT")
+st.title("HỆ THỐNG AI DỰ ĐOÁN VÙNG TÌM KIẾM TÍCH HỢP DỮ LIỆU THỜI TIẾT & ĐỊA HÌNH")
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -157,5 +157,5 @@ if uploaded_file is not None:
     st_folium(m, width="100%", height=600)
 
 else:
-    st.info("👋 Chào mừng! Hãy tải file Excel để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
-    st.image("https://media.vietnamplus.vn/images/db3eecc2e589c60996480488f99e20f49ca9bb5a263a4de8d02595b616691c38aa3bf5d5b92561c2a6a2ce192fbe6b5e74e94f2aa426d84316be5dd1ba1bf47f/mua_ngap_han_quoc.jpg", caption="Hệ thống trực chiến 24/7", use_container_width=True)
+    st.info(" Hãy tải file dữ liệu để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
+    st.image("https://drive.google.com/drive/folders/1YCXU__g6MdRrAEkwj9rcVSZU2xCsdev5?fbclid=IwY2xjawR6DdVleHRuA2FlbQIxMQBzcnRjBmFwcF9pZAEwAAEenvI5sOJr9qPcKW4NuQWYrlMIzkk8Vz46_vVASTzrddp6zv1guIoIYIv2yJg_aem_yruKePvJD3iKwpYF4t_HUg.png", caption="Hệ thống trực chiến 24/7", use_container_width=True)
