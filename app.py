@@ -158,4 +158,4 @@ if uploaded_file is not None:
 
 else:
     st.info(" Hãy tải file dữ liệu để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
-    st.image("https://drive.google.com/drive/folders/1YCXU__g6MdRrAEkwj9rcVSZU2xCsdev5?fbclid=IwY2xjawR6DdVleHRuA2FlbQIxMQBzcnRjBmFwcF9pZAEwAAEenvI5sOJr9qPcKW4NuQWYrlMIzkk8Vz46_vVASTzrddp6zv1guIoIYIv2yJg_aem_yruKePvJD3iKwpYF4t_HUg.png", caption="Hệ thống trực chiến 24/7", use_container_width=True)
+    st.image("https://drive.google.com/file/d/1jOmxcllUUF1hYMFGV-j3it-GwAYqo3ph/view?usp=sharing.png", caption="DỰ ÁN NEOSAR", use_container_width=True)
