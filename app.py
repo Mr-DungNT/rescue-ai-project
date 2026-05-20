@@ -158,4 +158,4 @@ if uploaded_file is not None:
 
 else:
     st.info(" Hãy tải file dữ liệu để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
-    st.image("https://lh3.googleusercontent.com/u/0/d/1jOmxcllUUF1hYMFGV-j3it-GwAYqo3ph.png", caption="DỰ ÁN NEOSAR", use_container_width=True)
+    st.image("https://t3.ftcdn.net/jpg/04/13/13/14/360_F_413131424_sVgxKDzWO4iq6hg7Gis1glwgv15ROTB6.jpg", caption="DỰ ÁN NEOSAR", use_container_width=True)
