@@ -141,7 +141,7 @@ if uploaded_file is not None:
 
     # --- BẢN ĐỒ ---
     st.divider()
-    st.subheader("📍 Bản đồ vệ tinh & Dự đoán vùng di chuyển")
+    st.subheader("Bản đồ vệ tinh & Dự đoán vùng di chuyển")
     m = folium.Map(location=[new_lat, new_lon], zoom_start=15)
     folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
                      attr='Esri', name='Vệ tinh').add_to(m)
