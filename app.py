@@ -37,7 +37,7 @@ st.set_page_config(page_title="AI Rescue System - Advanced", layout="wide")
 if 'analysis_active' not in st.session_state:
     st.session_state.analysis_active = False
 
-st.title("🚢 HỆ THỐNG AI CỨU HỘ TÍCH HỢP DỮ LIỆU THIÊN TAI")
+st.title("HỆ THỐNG CỨU HỘ AI TÍCH HỢP DỮ LIỆU ĐỊA HÌNH & THỜI TIẾT")
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
@@ -141,7 +141,7 @@ if uploaded_file is not None:
 
     # --- BẢN ĐỒ ---
     st.divider()
-    st.subheader("📍 Bản đồ vệ tinh & Dự đoán vùng trôi dạt")
+    st.subheader("📍 Bản đồ vệ tinh & Dự đoán vùng di chuyển")
     m = folium.Map(location=[new_lat, new_lon], zoom_start=15)
     folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
                      attr='Esri', name='Vệ tinh').add_to(m)
