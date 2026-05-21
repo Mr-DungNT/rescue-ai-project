@@ -87,7 +87,7 @@ if uploaded_file is not None:
 
     # --- HIỂN THỊ CHỈ SỐ NHANH ---
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Vận tốc tàu cuối", f"{velocity} km/h")
+    with col1: st.metric("Vận tốc trung bình", f"{velocity} km/h")
     with col2: st.metric("Sức gió thực tế", f"{wind_speed} m/s")
     with col3: st.metric("Nhiệt độ môi trường", f"{weather['temp'] if weather else '--'}°C")
     with col4: st.metric("Lượng mưa hiện tại", f"{weather['rain'] if weather else '--'} mm/h")
