@@ -382,7 +382,7 @@ if not st.session_state.model_trained:
         st.session_state.model_lon = mln
         st.session_state.model_trained = True
     if XGBOOST_AVAILABLE:
-        st.success("✅ XGBoost đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
+        st.success("Model XGBoost đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
     else:
         st.warning("⚠️ XGBoost chưa cài (`pip install xgboost`) — đang dùng mô hình vật lý dự phòng.")
 
@@ -528,7 +528,7 @@ else:
     # ── Welcome Screen (Đã tối ưu padding để dịch ảnh lên phía trên) ──
     st.markdown("""
 <div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
-    <h2 style="color:#00e5ff; font-family:'Share Tech Mono',monospace; margin-bottom: 5px;">⬅️ TẢI FILE EXCEL ĐỂ BẮT ĐẦU</h2>
+    <h2 style="color:#00e5ff; font-family:'Share Tech Mono',monospace; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
     <p style="color:#4a7a9b; max-width:600px; margin:0 auto 15px auto; line-height:1.6;">
         Hệ thống sẽ tự động bóc tách tọa độ, kết nối thời tiết thực tế,
         chạy mô hình <b>XGBoost</b> và hiển thị bản đồ vệ tinh <b>3D Pydeck</b>
@@ -540,7 +540,7 @@ else:
     # Loại bỏ chia cột st.columns để ảnh tự động chiếm trọn không gian và phóng to ra
     try:
         # Gọi trực tiếp file ảnh PNG và cho bung full chiều rộng container
-        st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro AI 24/7", use_container_width=True)
+        st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro", use_container_width=True)
     except Exception:
         # Nhánh dự phòng nếu không tìm thấy file ảnh
         st.info("💡 Mẹo: Bỏ file ảnh tên 'cuuho.png' vào thư mục dự án để hiển thị poster chỉ huy.")
