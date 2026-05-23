@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
+import folium
+from streamlit_folium import st_folium
 import re
 import time
 import math
 import requests
-import pydeck as pdk
-import numpy as np
 
 # --- CẤU HÌNH API THỜI TIẾT ---
 API_KEY = "23913db94b60da48fe4dd64dbab2344f"
@@ -33,7 +33,7 @@ def get_realtime_weather(lat, lon):
 # --- CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(page_title="AI Rescue System - Advanced", layout="wide")
 
-# KHỞI TẠO BỘ NHỚ TẠM (SESSION STATE)
+# KHỞI TẠO BỘ NHỚ TẠM (SESSION STATE) - Giải quyết lỗi tự động load lại trang
 if 'analysis_active' not in st.session_state:
     st.session_state.analysis_active = False
 
@@ -52,61 +52,17 @@ uploaded_file = st.sidebar.file_uploader("Tải lên file Trip Report (Excel)", 
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
     
-    # THUẬT TOÁN QUÉT VÀ TRÍCH XUẤT TOÀN BỘ TỌA ĐỘ LỘ TRÌNH (CHỐNG SẬP 100%)
-    def process_entire_trip(dataframe):
-        lats, lons, elevations = [], [], []
-        current_elevation = 10.0  # Điểm bắt đầu ở chân núi
-        
-        for idx, row in dataframe.iterrows():
-            row_lat, row_lon = None, None
-            # Quét tìm tọa độ số trong các ô của dòng
-            for cell in row:
-                val_str = str(cell)
-                numbers = re.findall(r"\d+\.\d+", val_str)
-                if len(numbers) >= 2:
-                    row_lat, row_lon = float(numbers[0]), float(numbers[1])
-                    break
-            
-            # Khớp chữ nếu không tìm thấy số (Dành cho file địa chỉ hành chính chữ)
-            if row_lat is None or row_lon is None:
-                for cell in row:
-                    val_str = str(cell)
-                    if "Đại Cồ Việt" in val_str or "Bách Khoa" in val_str or "Hai Bà Trưng" in val_str:
-                        row_lat, row_lon = 21.0168 - (idx * 0.0002), 105.8490 + (idx * 0.0002) # Phân rã vết lộ trình
-                        break
-                    elif "Trần Đại Nghĩa" in val_str or "Đồng Tâm" in val_str:
-                        row_lat, row_lon = 21.0024 - (idx * 0.0002), 105.8424 + (idx * 0.0002)
-                        break
-            
-            # Lưu lại nếu hợp lệ và tích lũy cao độ tăng dần (mô phỏng leo núi dốc đứng)
-            if row_lat and row_lon:
-                lats.append(row_lat)
-                lons.append(row_lon)
-                elevations.append(current_elevation)
-                current_elevation += 45.0  # Mỗi bước di chuyển cao độ tăng thêm 45 mét dốc
-                
-        # Nếu file lỗi hoàn toàn dữ liệu, trả về mốc cứu hộ Hà Nội mặc định
-        if not lats:
-            lats, lons, elevations = [21.0285], [105.8542], [100.0]
-            
-        return lats, lons, elevations
+    def extract_coords(text):
+        try:
+            numbers = re.findall(r"[-+]?\d*\.\d+|\d+", str(text))
+            return float(numbers[0]), float(numbers[1])
+        except: return None, None
 
-    # Xử lý ma trận lộ trình đa điểm
-    trip_lats, trip_lons, trip_elevations = process_entire_trip(df)
-    
-    # Gán điểm định vị cuối cùng làm mốc tính toán thời tiết
-    lat, lon = trip_lats[0], trip_lons[0]
-    
-    # Quét tìm vận tốc tàu dòng đầu tiên
     latest = df.iloc[0]
-    velocity = 0.0
-    for cell_value in latest:
-        val_str = str(cell_value)
-        if "km/h" in val_str:
-            velocity_match = re.findall(r"[-+]?\d*\.\d+|\d+", val_str)
-            if velocity_match:
-                velocity = float(velocity_match[0])
-                break
+    lat, lon = extract_coords(latest.iloc[5]) 
+    velocity_str = str(latest.iloc[9])
+    velocity_match = re.findall(r"[-+]?\d*\.\d+|\d+", velocity_str)
+    velocity = float(velocity_match[0]) if velocity_match else 0.0
 
     # --- LẤY THỜI TIẾT THỰC TẾ ---
     st.sidebar.markdown("---")
@@ -114,7 +70,7 @@ if uploaded_file is not None:
     weather = get_realtime_weather(lat, lon)
     
     if weather:
-        st.sidebar.success(f"📍 Tọa độ điểm cuối: {lat:.4f}, {lon:.4f}")
+        st.sidebar.success(f"📍 Tọa độ: {lat}, {lon}")
         st.sidebar.metric("🌡️ Nhiệt độ", f"{weather['temp']}°C")
         st.sidebar.metric("🌧️ Lượng mưa", f"{weather['rain']} mm/h")
         st.sidebar.write(f"👁️ Tầm nhìn: {weather['visibility']} km")
@@ -148,6 +104,7 @@ if uploaded_file is not None:
     st.divider()
     st.subheader("🤖 Phân tích AI & Chiến thuật Cứu hộ chuyên nghiệp")
     
+    # Nút bấm kích hoạt trạng thái
     if st.button("Kích hoạt AI Phân tích rủi ro & Tọa độ"):
         st.session_state.analysis_active = True
         with st.status("Đang quét dữ liệu đa tầng...", expanded=True) as status:
@@ -157,11 +114,14 @@ if uploaded_file is not None:
             st.write("🌡️ Đang tính toán rủi ro hạ thân nhiệt...")
             status.update(label="Hoàn tất phân tích!", state="complete")
 
+    # Hiển thị kết quả nếu trạng thái Active là True
     if st.session_state.analysis_active:
         is_heavy_rain = weather['rain'] > 5 if weather else False
         is_cold = weather['temp'] < 20 if weather else False
         water_temp = (weather['temp'] - 2) if weather else 20
         survival_time = "6-12 giờ" if water_temp > 20 else "2-4 giờ"
+        
+        danger_msg = "🚨 CẢNH BÁO NGUY HIỂM:" if is_heavy_rain else "✅ ĐIỀU KIỆN ỔN ĐỊNH:"
         
         st.warning(f"""
         ### 🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN:
@@ -179,58 +139,23 @@ if uploaded_file is not None:
         """)
         st.code(f"{new_lat:.6f}, {new_lon:.6f}", language="text")
 
-    # --- BẢN ĐỒ KHỐI 3D MÔ PHỎNG LEO NÚI / DỐC TÍCH LŨY ---
+    # --- BẢN ĐỒ ---
     st.divider()
-    st.subheader("🔮 Bản đồ hành trình mô phỏng 3D cao độ tích lũy")
-    st.caption("💡 Mẹo thuyết trình: Nhấn giữ nút chuột phải hoặc tổ hợp phím Ctrl + Chuột trái để xoay nghiêng góc nhìn thấy dốc núi nhô cao.")
+    st.subheader("Bản đồ vệ tinh & Dự đoán vùng di chuyển")
+    m = folium.Map(location=[new_lat, new_lon], zoom_start=15)
+    folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+                     attr='Esri', name='Vệ tinh').add_to(m)
 
-    # Tạo tập hợp dữ liệu chứa cao độ biến thiên
-    map_data = pd.DataFrame({
-        "latitude": trip_lats,
-        "longitude": trip_lons,
-        "altitude": trip_elevations  # Cột cao độ tăng dần theo hành trình thời gian
-    })
+    folium.Marker([lat, lon], popup="Điểm mất dấu", icon=folium.Icon(color='black', icon='off')).add_to(m)
+    folium.Circle(location=[new_lat, new_lon], radius=total_drift_meters/2 + 200, 
+                  color="red", fill=True, fill_opacity=0.3, popup="Vùng mục tiêu ưu tiên").add_to(m)
+    
+    # Mũi tên hướng gió
+    folium.PolyLine([[lat, lon], [lat + 0.005 * math.cos(bearing), lon + 0.005 * math.sin(bearing)]], 
+                    color="yellow", weight=4).add_to(m)
 
-    # Cấu hình lớp bản đồ khối lục giác Pydeck HexagonLayer dựa trên cao độ hành trình
-    layer_3d = pdk.Layer(
-        "HexagonLayer",
-        data=map_data,
-        get_position=["longitude", "latitude"],
-        get_elevation_value="altitude",     # Ép độ cao dựa trên mốc leo dốc giả lập
-        aggregation=pdk.types.String("MAX"),
-        radius=25,                           # Bán kính cột thon gọn sắc nét
-        elevation_scale=5,                  # Tỷ lệ đẩy cao dốc cột nhô lên hẳn mặt đất
-        elevation_range=[0, 5000],
-        extruded=True,                       # Kích hoạt tạo hình 3D đổ bóng khối
-        pickable=True,
-        coverage=0.95,
-        # Phối dải màu dốc từ thung lũng (Xanh lam) lên đỉnh núi cao (Đỏ rực bốc khối)
-        color_range=[
-            [0, 128, 255, 160],
-            [0, 200, 150, 180],
-            [150, 220, 0, 200],
-            [255, 200, 0, 220],
-            [255, 100, 0, 240],
-            [220, 0, 50, 255]
-        ]
-    )
-
-    # Cấu hình góc nhìn nghiêng camera bao quát dốc khối lộ trình
-    view_state = pdk.ViewState(
-        latitude=lat,
-        longitude=lon,
-        zoom=14.8,
-        pitch=62,                            # Độ nghiêng camera sâu (62 độ) để thấy rõ vách đứng 3D
-        bearing=-25                          # Xoay la bàn nghiêng góc nghệ thuật
-    )
-
-    st.pydeck_chart(pdk.Deck(
-        layers=[layer_3d],
-        initial_view_state=view_state,
-        map_style="mapbox://styles/mapbox/satellite-v9",
-        tooltip={"text": "Mốc cao độ mô phỏng: {elevationValue} mét"}
-    ))
+    st_folium(m, width="100%", height=600)
 
 else:
     st.info("👋 Chào mừng! Hãy tải file Excel để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
-    st.image("http://googleusercontent.com/profile/picture/3", caption="Hệ thống trực chiến 24/7", use_container_width=True)
+    st.image("https://capovelo.com/wp-content/uploads/2021/04/newmaps.jpeg", caption="Hệ thống trực chiến 24/7", use_container_width=True)
