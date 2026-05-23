@@ -536,3 +536,13 @@ else:
     </p>
 </div>
 """, unsafe_allow_html=True)
+    
+# Chia tỷ lệ 3 cột để ép bức ảnh thu gọn và căn lề ngay chính giữa màn hình
+    col_left, col_mid, col_right = st.columns([1, 2, 1])
+    with col_mid:
+        try:
+            # Gọi trực tiếp file ảnh PNG lưu nội bộ trong máy của cậu
+            st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro AI 24/7", use_container_width=True)
+        except Exception:
+            # Nhánh dự phòng phòng hờ gõ sai tên file, app vẫn chạy tiếp không bị lỗi đỏ
+            st.info("💡 Mẹo: Bỏ file ảnh tên 'cuuho.png' vào thư mục dự án để hiển thị poster chỉ huy.")
