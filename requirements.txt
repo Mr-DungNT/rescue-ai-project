@@ -4,5 +4,6 @@ folium
 streamlit-folium
 openpyxl
 requests
-numpy
+numpy  
+xgboost
 pydeck
