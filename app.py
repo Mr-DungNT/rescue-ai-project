@@ -298,7 +298,7 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon,
     deck = pdk.Deck(
         layers=[hex_layer, path_layer, scatter_layer, ring_layer],
         initial_view_state=view_state,
-        map_style="mapbox://styles/mapbox/satellite-streets-v12",
+        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         tooltip={"text": "{label}\n{name}"},
     )
     return deck
