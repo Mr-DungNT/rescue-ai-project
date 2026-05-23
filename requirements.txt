@@ -7,3 +7,4 @@ requests
 numpy  
 xgboost
 pydeck
+scikit-learn
