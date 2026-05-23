@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
 import re
 import time
 import math
 import requests
+import pydeck as pdk
+import numpy as np
 
 # --- CẤU HÌNH API THỜI TIẾT ---
 API_KEY = "23913db94b60da48fe4dd64dbab2344f"
@@ -139,22 +139,62 @@ if uploaded_file is not None:
         """)
         st.code(f"{new_lat:.6f}, {new_lon:.6f}", language="text")
 
-    # --- BẢN ĐỒ ---
+    # --- BẢN ĐỒ KHỐI 3D HEATMAP CHUYÊN SÂU (MỚI) ---
     st.divider()
-    st.subheader("Bản đồ vệ tinh & Dự đoán vùng di chuyển")
-    m = folium.Map(location=[new_lat, new_lon], zoom_start=15)
-    folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
-                     attr='Esri', name='Vệ tinh').add_to(m)
+    st.subheader("🔮 Bản đồ mô phỏng 3D Xác suất trôi dạt & Heatmap")
+    st.caption("💡 Mẹo thuyết trình: Nhấn giữ nút chuột phải hoặc tổ hợp phím Ctrl + Chuột trái để xoay nghiêng/lật góc nhìn 3D.")
 
-    folium.Marker([lat, lon], popup="Điểm mất dấu", icon=folium.Icon(color='black', icon='off')).add_to(m)
-    folium.Circle(location=[new_lat, new_lon], radius=total_drift_meters/2 + 200, 
-                  color="red", fill=True, fill_opacity=0.3, popup="Vùng mục tiêu ưu tiên").add_to(m)
+    # Giả lập ma trận điểm xác suất phân phối quanh tâm AI dự đoán để vẽ khối 3D Heatmap
+    np.random.seed(42)
+    num_points = 600
+    std_dev = (total_drift_meters / 2) / 111111
     
-    # Mũi tên hướng gió
-    folium.PolyLine([[lat, lon], [lat + 0.005 * math.cos(bearing), lon + 0.005 * math.sin(bearing)]], 
-                    color="yellow", weight=4).add_to(m)
+    lats_sim = np.random.normal(new_lat, std_dev, num_points)
+    lons_sim = np.random.normal(new_lon, std_dev / math.cos(math.radians(lat)), num_points)
+    
+    map_data = pd.DataFrame({
+        "latitude": lats_sim,
+        "longitude": lons_sim
+    })
 
-    st_folium(m, width="100%", height=600)
+    # Cấu hình lớp bản đồ khối lục giác HexagonLayer 3D
+    layer_3d = pdk.Layer(
+        "HexagonLayer",
+        data=map_data,
+        get_position=["longitude", "latitude"],
+        radius=35,            # Bán kính cột lục giác (mét)
+        elevation_scale=12,   # Hệ số kéo cao cột khối dữ liệu
+        elevation_range=[0, 1000],
+        extruded=True,        # Đổ khối 3D
+        pickable=True,
+        coverage=1,
+        # Dải màu Heatmap chuyển từ Xanh (Lạnh) -> Đỏ rực (Nóng/Xác suất cao)
+        color_range=[
+            [65, 182, 196, 180],
+            [127, 205, 187, 200],
+            [199, 233, 180, 220],
+            [252, 141, 89, 230],
+            [227, 26, 28, 240],
+            [177, 0, 38, 255]
+        ]
+    )
+
+    # Định vị Camera góc nhìn nghiêng 3D mặc định khi load trang
+    view_state = pdk.ViewState(
+        latitude=new_lat,
+        longitude=new_lon,
+        zoom=14.5,
+        pitch=55,             # Góc nghiêng camera (55 độ)
+        bearing=-15           # Góc xoay la bàn bản đồ
+    )
+
+    # Đẩy biểu đồ Pydeck lên giao diện với lớp bản đồ vệ tinh Mapbox
+    st.pydeck_chart(pdk.Deck(
+        layers=[layer_3d],
+        initial_view_state=view_state,
+        map_style="mapbox://styles/mapbox/satellite-v9",
+        tooltip={"text": "Mật độ xác suất: {count} điểm tin cậy"}
+    ))
 
 else:
     st.info("👋 Chào mừng! Hãy tải file Excel để bắt đầu cập nhật dữ liệu thiên tai thời gian thực.")
