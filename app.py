@@ -525,24 +525,22 @@ if uploaded_file is not None:
 """, unsafe_allow_html=True)
 
 else:
-    # ── Welcome Screen ──
+    # ── Welcome Screen (Đã tối ưu padding để dịch ảnh lên phía trên) ──
     st.markdown("""
-<div style="text-align:center; padding: 60px 20px;">
-    <h2 style="color:#00e5ff; font-family:'Share Tech Mono',monospace;">⬅️ Tải file Excel để bắt đầu</h2>
-    <p style="color:#4a7a9b; max-width:500px; margin:0 auto; line-height:1.8;">
+<div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
+    <h2 style="color:#00e5ff; font-family:'Share Tech Mono',monospace; margin-bottom: 5px;">⬅️ TẢI FILE EXCEL ĐỂ BẮT ĐẦU</h2>
+    <p style="color:#4a7a9b; max-width:600px; margin:0 auto 15px auto; line-height:1.6;">
         Hệ thống sẽ tự động bóc tách tọa độ, kết nối thời tiết thực tế,
         chạy mô hình <b>XGBoost</b> và hiển thị bản đồ vệ tinh <b>3D Pydeck</b>
         với vùng xác suất <b>68% & 95%</b>.
     </p>
 </div>
 """, unsafe_allow_html=True)
-    
-# Chia tỷ lệ 3 cột để ép bức ảnh thu gọn và căn lề ngay chính giữa màn hình
-    col_left, col_mid, col_right = st.columns([1, 2, 1])
-    with col_mid:
-        try:
-            # Gọi trực tiếp file ảnh PNG lưu nội bộ trong máy của cậu
-            st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro AI 24/7", use_container_width=True)
-        except Exception:
-            # Nhánh dự phòng phòng hờ gõ sai tên file, app vẫn chạy tiếp không bị lỗi đỏ
-            st.info("💡 Mẹo: Bỏ file ảnh tên 'cuuho.png' vào thư mục dự án để hiển thị poster chỉ huy.")
+
+    # Loại bỏ chia cột st.columns để ảnh tự động chiếm trọn không gian và phóng to ra
+    try:
+        # Gọi trực tiếp file ảnh PNG và cho bung full chiều rộng container
+        st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro AI 24/7", use_container_width=True)
+    except Exception:
+        # Nhánh dự phòng nếu không tìm thấy file ảnh
+        st.info("💡 Mẹo: Bỏ file ảnh tên 'cuuho.png' vào thư mục dự án để hiển thị poster chỉ huy.")
