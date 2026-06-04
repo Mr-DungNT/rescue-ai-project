@@ -11,7 +11,6 @@ import json
 # ─────────────────────────────────────────────
 # PHẦN 1: ML ENGINE — XGBoost + Synthetic Data
 # ─────────────────────────────────────────────
-# Import lazy để không crash nếu chưa cài
 try:
     from xgboost import XGBRegressor
     XGBOOST_AVAILABLE = True
@@ -20,27 +19,18 @@ except ImportError:
 
 @st.cache_resource(show_spinner=False)
 def train_xgboost_model():
-    """
-    Train XGBoost trên synthetic data sinh từ mô hình vật lý.
-    Cache lại — chỉ train 1 lần duy nhất khi khởi động app.
-    
-    Features: [velocity_kmh, wind_speed_ms, wind_deg, time_lost_min, temp_c]
-    Targets : [delta_lat, delta_lon]
-    """
     if not XGBOOST_AVAILABLE:
         return None, None
 
     np.random.seed(42)
-    N = 5000  # 5000 mẫu tổng hợp
+    N = 5000  
 
-    # Sinh dữ liệu đầu vào ngẫu nhiên trong dải thực tế
-    velocity    = np.random.uniform(0, 60, N)       # km/h
-    wind_speed  = np.random.uniform(0, 25, N)       # m/s
-    wind_deg    = np.random.uniform(0, 360, N)      # độ
-    time_lost   = np.random.uniform(5, 120, N)      # phút
-    temp_c      = np.random.uniform(5, 40, N)       # °C
+    velocity    = np.random.uniform(0, 60, N)       
+    wind_speed  = np.random.uniform(0, 25, N)       
+    wind_deg    = np.random.uniform(0, 360, N)      
+    time_lost   = np.random.uniform(5, 120, N)      
+    temp_c      = np.random.uniform(5, 40, N)       
 
-    # Mô hình vật lý làm nhãn (ground truth) + nhiễu Gaussian ±5%
     noise = np.random.normal(1.0, 0.05, N)
     bearing_rad = np.radians(wind_deg)
     drift_kmh   = velocity + (wind_speed * 3.6 * 0.03)
@@ -51,24 +41,13 @@ def train_xgboost_model():
 
     X = np.column_stack([velocity, wind_speed, wind_deg, time_lost, temp_c])
 
-    # Huấn luyện 2 model riêng: 1 cho lat, 1 cho lon
     model_lat = XGBRegressor(
-        n_estimators=200,
-        max_depth=5,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
-        verbosity=0
+        n_estimators=200, max_depth=5, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8, random_state=42, verbosity=0
     )
     model_lon = XGBRegressor(
-        n_estimators=200,
-        max_depth=5,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
-        verbosity=0
+        n_estimators=200, max_depth=5, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8, random_state=42, verbosity=0
     )
     model_lat.fit(X, delta_lat)
     model_lon.fit(X, delta_lon)
@@ -77,13 +56,7 @@ def train_xgboost_model():
 
 
 def predict_with_uncertainty(model_lat, model_lon, features, n_bootstrap=100):
-    """
-    Bootstrap Ensemble: chạy N lần với nhiễu nhỏ trên features
-    → trả về (mean_delta_lat, mean_delta_lon, std_lat, std_lon)
-    để vẽ ellipse xác suất 68% và 95%.
-    """
     if model_lat is None:
-        # Fallback vật lý nếu không có XGBoost
         velocity, wind_speed, wind_deg, time_lost, temp_c = features
         bearing = math.radians(wind_deg)
         drift_kmh = velocity + (wind_speed * 3.6 * 0.03)
@@ -97,16 +70,13 @@ def predict_with_uncertainty(model_lat, model_lon, features, n_bootstrap=100):
     lon_preds = []
 
     for _ in range(n_bootstrap):
-        # Thêm nhiễu nhỏ ±3% để mô phỏng uncertainty của sensor
         noisy = feat_arr * np.random.normal(1.0, 0.03, feat_arr.shape)
         lat_preds.append(model_lat.predict(noisy)[0])
         lon_preds.append(model_lon.predict(noisy)[0])
 
     return (
-        float(np.mean(lat_preds)),
-        float(np.mean(lon_preds)),
-        float(np.std(lat_preds)),
-        float(np.std(lon_preds))
+        float(np.mean(lat_preds)), float(np.mean(lon_preds)),
+        float(np.std(lat_preds)), float(np.std(lon_preds))
     )
 
 
@@ -139,8 +109,6 @@ def get_realtime_weather(lat, lon):
 # ─────────────────────────────────────────────
 # PHẦN 3: DATA INGESTION — Xử lý Excel bền vững
 # ─────────────────────────────────────────────
-
-# Bảng ánh xạ địa chỉ chữ → tọa độ (mở rộng dễ dàng)
 ADDRESS_MAP = {
     "đại cồ việt":      (21.0032, 105.8430),
     "trần đại nghĩa":   (21.0022, 105.8430),
@@ -152,19 +120,10 @@ ADDRESS_MAP = {
 }
 
 def extract_coords_robust(text):
-    """
-    Bóc tách tọa độ bền vững:
-    1. Thử tìm float hợp lệ (lat trong [-90,90], lon trong [-180,180])
-    2. Nếu không có → ánh xạ địa chỉ chữ
-    3. Fallback → Hà Nội
-    """
     text_str = str(text).strip()
-
-    # Tìm tất cả số float/int
     numbers = re.findall(r"[-+]?\d+\.?\d*", text_str)
     floats  = [float(n) for n in numbers]
 
-    # Lọc cặp lat/lon hợp lệ
     valid_pairs = [
         (floats[i], floats[i+1])
         for i in range(len(floats)-1)
@@ -173,13 +132,12 @@ def extract_coords_robust(text):
     if valid_pairs:
         return valid_pairs[0]
 
-    # Ánh xạ địa chỉ
     lower = text_str.lower()
     for key, coords in ADDRESS_MAP.items():
         if key in lower:
             return coords
 
-    return (21.0278, 105.8342)  # Fallback Hà Nội
+    return (21.0278, 105.8342)  
 
 
 def extract_velocity(text):
@@ -188,14 +146,10 @@ def extract_velocity(text):
 
 
 def build_route_3d(df, coord_col_idx=5, n_points=None):
-    """
-    Đọc toàn bộ lộ trình từ DataFrame,
-    tích lũy cao độ giả lập để render Pydeck 3D.
-    """
     rows = []
     for i, (_, row) in enumerate(df.iterrows()):
         lat, lon = extract_coords_robust(row.iloc[coord_col_idx])
-        altitude = i * 15  # tích lũy 15m mỗi điểm → hiệu ứng leo núi
+        altitude = i * 15  
         rows.append({"lat": lat, "lon": lon, "altitude": altitude, "step": i})
     return pd.DataFrame(rows)
 
@@ -203,18 +157,7 @@ def build_route_3d(df, coord_col_idx=5, n_points=None):
 # ─────────────────────────────────────────────
 # PHẦN 4: PYDECK 3D MAP
 # ─────────────────────────────────────────────
-
-def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon,
-                     std_lat, std_lon):
-    """
-    Render bản đồ Pydeck 3D với:
-    - HexagonLayer: heatmap tích lũy lộ trình (màu lạnh→nóng)
-    - ScatterplotLayer: điểm mất dấu (đỏ), tâm datum (vàng)
-    - PathLayer: đường lộ trình
-    - ScatterplotLayer (rings): vòng ellipse xác suất 68% và 95%
-    """
-
-    # --- Layer 1: Hexagon Heatmap 3D ---
+def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, std_lat, std_lon):
     hex_layer = pdk.Layer(
         "HexagonLayer",
         data=route_df,
@@ -235,7 +178,6 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon,
         ],
     )
 
-    # --- Layer 2: Path Layer ---
     path_data = [{"path": [[r.lon, r.lat] for _, r in route_df.iterrows()]}]
     path_layer = pdk.Layer(
         "PathLayer",
@@ -245,7 +187,6 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon,
         width_min_pixels=3,
     )
 
-    # --- Layer 3: Điểm mất dấu & Datum ---
     points_data = [
         {"lat": origin_lat, "lon": origin_lon, "color": [20, 20, 20, 255],   "radius": 120, "label": "Điểm mất dấu"},
         {"lat": target_lat, "lon": target_lon, "color": [255, 50,  50, 255], "radius": 150, "label": "Tâm Datum (XGBoost)"},
@@ -259,8 +200,6 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon,
         pickable=True,
     )
 
-    # --- Layer 4: Vòng xác suất 68% & 95% ---
-    # Xấp xỉ ellipse bằng 64 điểm trên vòng tròn
     def make_ring(center_lat, center_lon, r_lat, r_lon, n=64):
         pts = []
         for k in range(n + 1):
@@ -286,7 +225,6 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon,
         width_min_pixels=2,
     )
 
-    # --- View State ---
     view_state = pdk.ViewState(
         latitude=(origin_lat + target_lat) / 2,
         longitude=(origin_lon + target_lon) / 2,
@@ -307,14 +245,12 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon,
 # ─────────────────────────────────────────────
 # PHẦN 5: STREAMLIT UI
 # ─────────────────────────────────────────────
-
 st.set_page_config(
     page_title="AI Rescue System v2",
     layout="wide",
     page_icon="🚨"
 )
 
-# ── CSS nền tối, tích hợp toàn bộ form và box phân tích màu trắng chuẩn Apple Style ──
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap');
@@ -326,14 +262,12 @@ html, body, [class*="css"] {
     color: #c8d8e8;
 }
 
-/* Tối ưu hóa phông chữ hệ thống tiêu đề */
 h1, h2, h3 { 
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif !important; 
     color: #00e5ff; 
     letter-spacing: 1px; 
 }
 
-/* ĐỔI TOÀN BỘ NỀN KHỐI METRIC SANG MÀU TRẮNG TINH KHÔI */
 .stMetric { 
     background: #ffffff !important; 
     border: 1px solid #d2d2d7 !important; 
@@ -345,7 +279,6 @@ h1, h2, h3 {
 .stMetric label { color: #515154 !important; font-size: 0.8rem !important; font-weight: 500; }
 .stMetric [data-testid="stMetricValue"] { color: #1d1d1f !important; font-weight: 800; font-size: 1.6rem !important; }
 
-/* ĐỔI NỀN CÁC Ô NHẬP LIỆU, SLIDER, CHỌN FILE SANG MÀU TRẮNG VÀ CHỮ TỐI */
 div[data-testid="stNumberInput"] div,
 div[data-testid="stTextInput"] div,
 .stSlider div,
@@ -357,14 +290,12 @@ div[data-testid="stFileUploaderDropzone"] {
     border-radius: 8px !important;
 }
 
-/* Chỉnh màu text bên trong các ô input màu trắng để đọc được rõ ràng */
 div[data-testid="stNumberInput"] input, 
 div[data-testid="stTextInput"] input {
     color: #1d1d1f !important;
     font-weight: 500;
 }
 
-/* Thiết kế nút bấm */
 div.stButton > button {
     background: linear-gradient(135deg, #ff4b2b, #ff416c);
     color: white; border: none; border-radius: 6px;
@@ -375,11 +306,10 @@ div.stButton > button {
 }
 div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transform: scale(1.03); }
 
-/* ĐỔI NỀN KHỐI TỌA ĐỘ MỤC TIÊU ƯU TIÊN SANG MÀU TRẮNG - CHỮ TỐI */
 .warning-box {
     background: #ffffff !important; 
     border: 1px solid #d2d2d7 !important;
-    border-left: 6px solid #ff4b2b !important; /* Giữ nguyên thanh viền cam đỏ tactical */
+    border-left: 6px solid #ff4b2b !important; 
     border-radius: 10px !important;
     padding: 22px; 
     margin: 16px 0; 
@@ -391,11 +321,10 @@ div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transfor
     color: #1d1d1f !important;
 }
 
-/* ĐỔI NỀN KHỐI PHÂN TÍCH CHUYÊN MÔN SANG MÀU TRẮNG - CHỮ TỐI */
 .success-box {
     background: #ffffff !important; 
     border: 1px solid #d2d2d7 !important;
-    border-left: 6px solid #00e676 !important; /* Giữ nguyên thanh viền xanh lá cứu hộ */
+    border-left: 6px solid #00e676 !important; 
     border-radius: 10px !important;
     padding: 22px; 
     margin: 16px 0;
@@ -428,12 +357,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.divider()
 
-# ── Session State ──
 for key in ['analysis_active', 'model_lat', 'model_lon', 'model_trained']:
     if key not in st.session_state:
         st.session_state[key] = False
 
-# ── Pre-load XGBoost (chạy ngầm khi app khởi động) ──
 if not st.session_state.model_trained:
     with st.spinner("⚙️ Đang khởi tạo mô hình XGBoost (chỉ lần đầu)..."):
         ml, mln = train_xgboost_model()
@@ -452,12 +379,10 @@ uploaded_file = st.sidebar.file_uploader("Tải file Trip Report (Excel)", type=
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
 
-    # Lấy dữ liệu dòng đầu
     latest   = df.iloc[0]
     lat, lon = extract_coords_robust(latest.iloc[5])
     velocity = extract_velocity(latest.iloc[9])
 
-    # Weather
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🌍 Môi trường thực tế")
     weather = get_realtime_weather(lat, lon)
@@ -478,24 +403,21 @@ if uploaded_file is not None:
 
     time_lost = st.sidebar.slider("⏱️ Thời gian mất tín hiệu (phút)", 5, 120, 30)
 
-    # ── Quick Metrics ──
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("🚗 Vận tốc TB",        f"{velocity} km/h")
     col2.metric("🌬️ Sức gió",           f"{wind_speed} m/s")
     col3.metric("🌡️ Nhiệt độ",          f"{temp_c}°C")
-    col4.metric("⏱️ Mất tín hiệu",      f"{time_lost} phút")
+    col4.metric("⏱️ Mất tín hiệu",      f"{time_lost} minutes")
 
     st.sidebar.markdown("---")
     st.divider()
 
-    # ── Nút kích hoạt AI ──
     st.subheader("🤖 Phân tích AI & Chiến thuật Cứu hộ")
 
     if st.button("🚀   Kích hoạt AI Phân tích rủi ro & Tọa độ"):
         st.session_state.analysis_active = True
 
     if st.session_state.analysis_active:
-
         with st.status("🛰️ Đang quét dữ liệu đa tầng...", expanded=True) as status:
             st.write("🔄 Nạp mô hình XGBoost...")
             time.sleep(0.4)
@@ -507,35 +429,27 @@ if uploaded_file is not None:
             time.sleep(0.3)
             status.update(label="✅ Phân tích hoàn tất!", state="complete")
 
-        # ── Dự đoán XGBoost ──
         features = [velocity, wind_speed, wind_dir, time_lost, temp_c]
         d_lat, d_lon, std_lat, std_lon = predict_with_uncertainty(
-            st.session_state.model_lat,
-            st.session_state.model_lon,
-            features,
-            n_bootstrap=100
+            st.session_state.model_lat, st.session_state.model_lon, features, n_bootstrap=100
         )
 
         new_lat = lat + d_lat
         new_lon = lon + d_lon
 
-        # Bán kính vòng 68% tính bằng mét
         radius_68_m  = int(std_lat * 111111)
         radius_95_m  = int(std_lat * 1.96 * 111111)
 
-        # Survival analysis
         water_temp    = temp_c - 2
         survival_time = "6–12 giờ" if water_temp > 20 else ("2–4 giờ" if water_temp > 10 else "< 1 giờ")
         is_cold       = temp_c < 20
         is_rain       = (weather['rain'] > 5) if weather else False
 
-        # Kết quả (Đã đồng bộ hóa nền trắng sạch sẽ)
         st.markdown(f"""
 <div class="warning-box">
 <h3 style="color:#ff4b2b; margin-top:0; font-weight:700;">🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#666;">(XGBoost + Bootstrap)</span></h3>
 <p>📌 <b>Tâm Datum:</b> <code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:#ff4b2b !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
-<p>📐 <b>Vùng tin cậy 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp;
-      <b>95%:</b> ~<b>{radius_95_m} m</b></p>
+<p>📐 <b>Vùng tin cậy 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp; <b>95%:</b> ~<b>{radius_95_m} m</b></p>
 <p>Compass Dịch chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
 </div>
 <div class="success-box">
@@ -549,7 +463,6 @@ if uploaded_file is not None:
 
         st.code(f"LAT: {new_lat:.6f}   LON: {new_lon:.6f}   [±{radius_68_m}m @ 68% | ±{radius_95_m}m @ 95%]", language="text")
 
-        # ── Feature Importance ──
         if XGBOOST_AVAILABLE and st.session_state.model_lat is not None:
             with st.expander("📊 Feature Importance — XGBoost (Lat model)"):
                 fi = st.session_state.model_lat.feature_importances_
@@ -559,24 +472,16 @@ if uploaded_file is not None:
                 }).sort_values("Importance", ascending=False)
                 st.bar_chart(fi_df.set_index("Feature")["Importance"])
 
-        # ── Pydeck 3D Map ──
         st.divider()
         st.subheader("🗺️ Bản đồ vệ tinh 3D — Lộ trình & Vùng xác suất")
 
         route_df = build_route_3d(df, coord_col_idx=5)
-
         if route_df.empty or len(route_df) < 2:
-            # Nếu Excel không có đủ dòng lộ trình → mock 1 điểm
-            route_df = pd.DataFrame([
-                {"lat": lat, "lon": lon, "altitude": 0, "step": 0}
-            ])
+            route_df = pd.DataFrame([{"lat": lat, "lon": lon, "altitude": 0, "step": 0}])
 
-        deck = build_pydeck_map(
-            route_df, lat, lon, new_lat, new_lon, std_lat, std_lon
-        )
+        deck = build_pydeck_map(route_df, lat, lon, new_lat, new_lon, std_lat, std_lon)
         st.pydeck_chart(deck)
 
-        # Chú thích
         st.markdown("""
 <p style="font-size:0.78rem; color:#5a7a9a; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
 🟡 Đường vàng: Lộ trình &nbsp;|&nbsp; ⚫ Điểm đen: Mất dấu &nbsp;|&nbsp; 🔴 Điểm đỏ: Tâm Datum &nbsp;|&nbsp;
@@ -585,10 +490,10 @@ if uploaded_file is not None:
 """, unsafe_allow_html=True)
 
 else:
-    # ── Welcome Screen (Đã tối ưu padding để dịch ảnh lên phía trên) ──
+    # ── ĐỔI DÒNG CHỮ THÀNH MÀU ĐEN (style="color:#000000;") THEO YÊU CẦU ──
     st.markdown("""
 <div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
-    <h2 style="color:#00e5ff; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
+    <h2 style="color:#000000; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
     <p style="color:#4a7a9b; max-width:600px; margin:0 auto 15px auto; line-height:1.6;">
         Hệ thống sẽ tự động bóc tách tọa độ, kết nối thời tiết thực tế,
         chạy mô hình <b>XGBoost</b> và hiển thị bản đồ vệ tinh <b>3D Pydeck</b>
