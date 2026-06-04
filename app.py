@@ -455,7 +455,7 @@ if uploaded_file is not None:
 <div class="success-box">
 <h3 style="color:#00c853; margin-top:0; font-weight:700;">PHÂN TÍCH CHUYÊN MÔN</h3>
 <p> <b>Thời gian vàng:</b> <b style="color:#1d1d1f;">{survival_time}</b> (nhiệt độ dự báo ~{water_temp:.1f}°C)</p>
-<p><b>Rủi ro hạ thân nhiệt:</b> <b style="color:#ff4b2b;">{"🚨 CAO — cần ưu tiên sưởi ấm ngay" if is_cold else " Thấp- Nằm trong ngưỡng an toàn"}</b></p>
+<p><b>Rủi ro hạ thân nhiệt:</> <b style="color:#ff4b2b;">{"🚨 CAO — cần ưu tiên sưởi ấm ngay" if is_cold else " Thấp- Nằm trong ngưỡng an toàn"}</b></p>
 <p> <b>Lượng mưa:</b> <b style="color:#1d1d1f;">{"⚠️ Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else " Thấp, tầm nhìn ổn định - triển khai phương án cơ động tiếp cận và cứu hộ trực tiếp"}</b></p>
 <p><b>Chiến thuật đề xuất:</b> Triển khai tìm kiếm theo hình xoắn ốc mở rộng từ tâm tọa độ ưu tiên, ưu tiên vùng 68%.</p>
 </div>
