@@ -450,13 +450,13 @@ if uploaded_file is not None:
 <h3 style="color:#ff4b2b; margin-top:0; font-weight:700;">TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#666;">(XGBoost + Bootstrap)</span></h3>
 <p>📌 <b>Tọa độ có xác suất cao nhất:</b> <code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:#ff4b2b !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
 <p>📐 <b>Vùng dự báo 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp; <b>95%:</b> ~<b>{radius_95_m} m</b></p>
-<p>Vùng di chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
+<p><b>Vùng di chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
 </div>
 <div class="success-box">
-<h3 style="color:#00c853; margin-top:0; font-weight:700;">📋 PHÂN TÍCH CHUYÊN MÔN</h3>
+<h3 style="color:#00c853; margin-top:0; font-weight:700;">PHÂN TÍCH CHUYÊN MÔN</h3>
 <p> <b>Thời gian vàng:</b> <b style="color:#1d1d1f;">{survival_time}</b> (nhiệt độ dự báo ~{water_temp:.1f}°C)</p>
-<p><b>Rủi ro hạ thân nhiệt:</b> <b style="color:#ff4b2b;">{"🚨 CAO — cần ưu tiên sưởi ấm ngay" if is_cold else "✅ Thấp- Nằm trong ngưỡng an toàn"}</b></p>
-<p> <b>Lượng mưa:</b> <b style="color:#1d1d1f;">{"⚠️ Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else "✅ Thấp, tầm nhìn ổn định - triển khai phương án cơ động tiếp cận và cứu hộ trực tiếp"}</b></p>
+<p><b>Rủi ro hạ thân nhiệt:</b> <b style="color:#ff4b2b;">{"🚨 CAO — cần ưu tiên sưởi ấm ngay" if is_cold else " Thấp- Nằm trong ngưỡng an toàn"}</b></p>
+<p> <b>Lượng mưa:</b> <b style="color:#1d1d1f;">{"⚠️ Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else " Thấp, tầm nhìn ổn định - triển khai phương án cơ động tiếp cận và cứu hộ trực tiếp"}</b></p>
 <p><b>Chiến thuật đề xuất:</b> Triển khai tìm kiếm theo hình xoắn ốc mở rộng từ tâm tọa độ ưu tiên, ưu tiên vùng 68%.</p>
 </div>
 """, unsafe_allow_html=True)
