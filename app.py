@@ -314,34 +314,71 @@ st.set_page_config(
     page_icon="🚨"
 )
 
-# ── CSS nền tối, phong cách tactical ──
+# ── CSS nền tối, tích hợp form màu trắng chuẩn Apple Style ──
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Exo 2', sans-serif;
     background-color: #080f1a;
     color: #c8d8e8;
 }
-h1, h2, h3 { font-family: 'Share Tech Mono', monospace; color: #00e5ff; letter-spacing: 2px; }
-.stMetric { background: #0d1f33; border: 1px solid #1a3a5c; border-radius: 8px;
-            padding: 12px; border-left: 4px solid #00e5ff; }
-.stMetric label { color: #7aa8cc !important; font-size: 0.75rem !important; }
-.stMetric [data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 800; }
+
+/* Tối ưu hóa phông chữ hệ thống tiêu đề */
+h1, h2, h3 { 
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif !important; 
+    color: #00e5ff; 
+    letter-spacing: 1px; 
+}
+
+/* ĐỔI TOÀN BỘ NỀN KHỐI METRIC SANG MÀU TRẮNG TINH KHÔI */
+.stMetric { 
+    background: #ffffff !important; 
+    border: 1px solid #d2d2d7 !important; 
+    border-radius: 10px !important;
+    padding: 14px !important; 
+    border-left: 5px solid #00e5ff !important; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.stMetric label { color: #515154 !important; font-size: 0.8rem !important; font-weight: 500; }
+.stMetric [data-testid="stMetricValue"] { color: #1d1d1f !important; font-weight: 800; font-size: 1.6rem !important; }
+
+/* ĐỔI NỀN CÁC Ô NHẬP LIỆU, SLIDER, CHỌN FILE SANG MÀU TRẮNG VÀ CHỮ TỐI */
+div[data-testid="stNumberInput"] div,
+div[data-testid="stTextInput"] div,
+.stSlider div,
+[data-testid="stSidebar"] div[data-baseweb="select"] > div,
+div[data-testid="stFileUploaderDropzone"] {
+    background-color: #ffffff !important;
+    color: #1d1d1f !important;
+    border: 1px solid #d2d2d7 !important;
+    border-radius: 8px !important;
+}
+
+/* Chỉnh màu text bên trong các ô input màu trắng để đọc được rõ ràng */
+div[data-testid="stNumberInput"] input, 
+div[data-testid="stTextInput"] input {
+    color: #1d1d1f !important;
+    font-weight: 500;
+}
+
+/* Thiết kế nút bấm */
 div.stButton > button {
     background: linear-gradient(135deg, #ff4b2b, #ff416c);
     color: white; border: none; border-radius: 6px;
-    font-family: 'Share Tech Mono', monospace;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 1rem; padding: 12px 28px;
     box-shadow: 0 0 20px rgba(255,75,43,0.5);
     transition: all 0.3s ease;
 }
 div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transform: scale(1.03); }
+
 .warning-box {
     background: #0d1f33; border: 1px solid #ff4b2b;
     border-left: 5px solid #ff4b2b; border-radius: 8px;
-    padding: 20px; margin: 16px 0; font-family: 'Share Tech Mono', monospace;
+    padding: 20px; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 .success-box {
     background: #0a1f0d; border: 1px solid #00e676;
@@ -363,7 +400,7 @@ st.markdown("""
     🚨 HỆ THỐNG CỨU HỘ AI — TÍCH HỢP ĐỊA HÌNH & THỜI TIẾT
     <span class="model-badge">XGBoost v2 + 3D Pydeck</span>
 </h1>
-<p style="color:#5a8ab0; font-size:0.85rem; font-family:'Share Tech Mono',monospace;">
+<p style="color:#5a8ab0; font-size:0.85rem; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
     Real-time Weather · Drift Prediction · Uncertainty Ellipse · 3D Terrain Heatmap
 </p>
 """, unsafe_allow_html=True)
@@ -426,12 +463,13 @@ if uploaded_file is not None:
     col3.metric("🌡️ Nhiệt độ",          f"{temp_c}°C")
     col4.metric("⏱️ Mất tín hiệu",      f"{time_lost} phút")
 
+    st.sidebar.markdown("---")
     st.divider()
 
     # ── Nút kích hoạt AI ──
     st.subheader("🤖 Phân tích AI & Chiến thuật Cứu hộ")
 
-    if st.button("🚀  Kích hoạt AI Phân tích rủi ro & Tọa độ"):
+    if st.button("🚀   Kích hoạt AI Phân tích rủi ro & Tọa độ"):
         st.session_state.analysis_active = True
 
     if st.session_state.analysis_active:
@@ -518,7 +556,7 @@ if uploaded_file is not None:
 
         # Chú thích
         st.markdown("""
-<p style="font-size:0.78rem; color:#5a7a9a; font-family:'Share Tech Mono',monospace;">
+<p style="font-size:0.78rem; color:#5a7a9a; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
 🟡 Đường vàng: Lộ trình &nbsp;|&nbsp; ⚫ Điểm đen: Mất dấu &nbsp;|&nbsp; 🔴 Điểm đỏ: Tâm Datum &nbsp;|&nbsp;
 🟡 Vòng vàng: 68% &nbsp;|&nbsp; 🟠 Vòng cam: 95% &nbsp;|&nbsp; Cột màu: Heatmap tích lũy cao độ
 </p>
@@ -528,7 +566,7 @@ else:
     # ── Welcome Screen (Đã tối ưu padding để dịch ảnh lên phía trên) ──
     st.markdown("""
 <div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
-    <h2 style="color:#00e5ff; font-family:'Share Tech Mono',monospace; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
+    <h2 style="color:#00e5ff; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
     <p style="color:#4a7a9b; max-width:600px; margin:0 auto 15px auto; line-height:1.6;">
         Hệ thống sẽ tự động bóc tách tọa độ, kết nối thời tiết thực tế,
         chạy mô hình <b>XGBoost</b> và hiển thị bản đồ vệ tinh <b>3D Pydeck</b>
