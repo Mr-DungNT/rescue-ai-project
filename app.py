@@ -374,7 +374,7 @@ if not st.session_state.model_trained:
 
 # ── Sidebar ──
 st.sidebar.markdown("## 📂 Dữ liệu đầu vào")
-uploaded_file = st.sidebar.file_uploader("Tải file Trip Report (Excel)", type=["xlsx", "xls"])
+uploaded_file = st.sidebar.file_uploader("Tải file dữ liệu Trip Report ", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
@@ -407,14 +407,14 @@ if uploaded_file is not None:
     col1.metric("🚗 Vận tốc TB",        f"{velocity} km/h")
     col2.metric("🌬️ Sức gió",           f"{wind_speed} m/s")
     col3.metric("🌡️ Nhiệt độ",          f"{temp_c}°C")
-    col4.metric("⏱️ Mất tín hiệu",      f"{time_lost} minutes")
+    col4.metric("⏱️ Mất tín hiệu",      f"{time_lost} mins")
 
     st.sidebar.markdown("---")
     st.divider()
 
-    st.subheader("🤖 Phân tích AI & Chiến thuật Cứu hộ")
+    st.subheader("Phân tích AI & Chiến thuật Cứu hộ")
 
-    if st.button("🚀   Kích hoạt AI Phân tích rủi ro & Tọa độ"):
+    if st.button("Kích hoạt AI Phân tích rủi ro & Tọa độ"):
         st.session_state.analysis_active = True
 
     if st.session_state.analysis_active:
@@ -448,9 +448,9 @@ if uploaded_file is not None:
         st.markdown(f"""
 <div class="warning-box">
 <h3 style="color:#ff4b2b; margin-top:0; font-weight:700;">🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#666;">(XGBoost + Bootstrap)</span></h3>
-<p>📌 <b>Tâm Datum:</b> <code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:#ff4b2b !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
-<p>📐 <b>Vùng tin cậy 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp; <b>95%:</b> ~<b>{radius_95_m} m</b></p>
-<p>Compass Dịch chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
+<p>📌 <b>Tọa độ có xác suất cao nhất:</b> <code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:#ff4b2b !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
+<p>📐 <b>Vùng dự báo 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp; <b>95%:</b> ~<b>{radius_95_m} m</b></p>
+<p>Vùng di chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
 </div>
 <div class="success-box">
 <h3 style="color:#00c853; margin-top:0; font-weight:700;">📋 PHÂN TÍCH CHUYÊN MÔN</h3>
