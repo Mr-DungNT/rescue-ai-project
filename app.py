@@ -314,7 +314,7 @@ st.set_page_config(
     page_icon="🚨"
 )
 
-# ── CSS nền tối, tích hợp form màu trắng chuẩn Apple Style ──
+# ── CSS nền tối, tích hợp toàn bộ form và box phân tích màu trắng chuẩn Apple Style ──
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap');
@@ -375,16 +375,38 @@ div.stButton > button {
 }
 div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transform: scale(1.03); }
 
+/* ĐỔI NỀN KHỐI TỌA ĐỘ MỤC TIÊU ƯU TIÊN SANG MÀU TRẮNG - CHỮ TỐI */
 .warning-box {
-    background: #0d1f33; border: 1px solid #ff4b2b;
-    border-left: 5px solid #ff4b2b; border-radius: 8px;
-    padding: 20px; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #ffffff !important; 
+    border: 1px solid #d2d2d7 !important;
+    border-left: 6px solid #ff4b2b !important; /* Giữ nguyên thanh viền cam đỏ tactical */
+    border-radius: 10px !important;
+    padding: 22px; 
+    margin: 16px 0; 
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+    color: #1d1d1f !important;
 }
+.warning-box p, .warning-box b, .warning-box code {
+    color: #1d1d1f !important;
+}
+
+/* ĐỔI NỀN KHỐI PHÂN TÍCH CHUYÊN MÔN SANG MÀU TRẮNG - CHỮ TỐI */
 .success-box {
-    background: #0a1f0d; border: 1px solid #00e676;
-    border-left: 5px solid #00e676; border-radius: 8px;
-    padding: 20px; margin: 16px 0;
+    background: #ffffff !important; 
+    border: 1px solid #d2d2d7 !important;
+    border-left: 6px solid #00e676 !important; /* Giữ nguyên thanh viền xanh lá cứu hộ */
+    border-radius: 10px !important;
+    padding: 22px; 
+    margin: 16px 0;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+    color: #1d1d1f !important;
 }
+.success-box p, .success-box b {
+    color: #515154 !important;
+}
+
 .model-badge {
     display: inline-block; background: #00e5ff22;
     border: 1px solid #00e5ff; border-radius: 20px;
@@ -507,21 +529,21 @@ if uploaded_file is not None:
         is_cold       = temp_c < 20
         is_rain       = (weather['rain'] > 5) if weather else False
 
-        # Kết quả
+        # Kết quả (Đã đồng bộ hóa nền trắng sạch sẽ)
         st.markdown(f"""
 <div class="warning-box">
-<h3 style="color:#ff6b6b; margin-top:0;">🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#aaa;">(XGBoost + Bootstrap)</span></h3>
-<p>📌 <b>Tâm Datum:</b> <code>{new_lat:.6f}, {new_lon:.6f}</code></p>
+<h3 style="color:#ff4b2b; margin-top:0; font-weight:700;">🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#666;">(XGBoost + Bootstrap)</span></h3>
+<p>📌 <b>Tâm Datum:</b> <code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:#ff4b2b !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
 <p>📐 <b>Vùng tin cậy 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp;
       <b>95%:</b> ~<b>{radius_95_m} m</b></p>
-<p>🧭 Dịch chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
+<p>Compass Dịch chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
 </div>
 <div class="success-box">
-<h3 style="color:#00e676; margin-top:0;">📋 PHÂN TÍCH CHUYÊN MÔN</h3>
-<p>⏳ <b>Thời gian vàng:</b> {survival_time} (nhiệt độ nước ~{water_temp:.1f}°C)</p>
-<p>❄️ <b>Rủi ro hạ thân nhiệt:</b> {"🚨 CAO — cần ưu tiên sưởi ấm ngay" if is_cold else "✅ Thấp"}</p>
-<p>🌧️ <b>Lượng mưa:</b> {"⚠️ Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else "✅ Bình thường"}</p>
-<p>🚤 <b>Chiến thuật đề xuất:</b> Hình xoắn ốc mở rộng (Expanding Square) từ Datum, ưu tiên vùng 68%.</p>
+<h3 style="color:#00c853; margin-top:0; font-weight:700;">📋 PHÂN TÍCH CHUYÊN MÔN</h3>
+<p>Hourglass <b>Thời gian vàng:</b> <b style="color:#1d1d1f;">{survival_time}</b> (nhiệt độ nước ~{water_temp:.1f}°C)</p>
+<p>Snowflake <b>Rủi ro hạ thân nhiệt:</b> <b style="color:#ff4b2b;">{"🚨 CAO — cần ưu tiên sưởi ấm ngay" if is_cold else "✅ Thấp"}</b></p>
+<p>Cloud <b>Lượng mưa:</b> <b style="color:#1d1d1f;">{"⚠️ Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else "✅ Bình thường"}</b></p>
+<p>Boat <b>Chiến thuật đề xuất:</b> Hình xoắn ốc mở rộng (Expanding Square) từ Datum, ưu tiên vùng 68%.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -575,10 +597,7 @@ else:
 </div>
 """, unsafe_allow_html=True)
 
-    # Loại bỏ chia cột st.columns để ảnh tự động chiếm trọn không gian và phóng to ra
     try:
-        # Gọi trực tiếp file ảnh PNG và cho bung full chiều rộng container
         st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro", use_container_width=True)
     except Exception:
-        # Nhánh dự phòng nếu không tìm thấy file ảnh
         st.info("💡 Mẹo: Bỏ file ảnh tên 'cuuho.png' vào thư mục dự án để hiển thị poster chỉ huy.")
