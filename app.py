@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import re
@@ -10,7 +9,7 @@ import pydeck as pdk
 import json
 
 # ─────────────────────────────────────────────
-# PHẦN 1: ML ENGINE — XGBoost + Synthetic Data
+# PHẦN 1: ML ENGINE — Algorithm + Synthetic Data
 # ─────────────────────────────────────────────
 try:
     from xgboost import XGBRegressor
@@ -108,57 +107,61 @@ def get_realtime_weather(lat, lon):
 
 
 # ─────────────────────────────────────────────
-# PHẦN 3: DATA INGESTION — Xử lý Excel bền vững
+# PHẦN 3: DATA INGESTION — Đọc Tọa độ Đa điểm từ File
 # ─────────────────────────────────────────────
-ADDRESS_MAP = {
-    "đại cồ việt":      (21.0032, 105.8430),
-    "trần đại nghĩa":   (21.0022, 105.8430),
-    "hoàn kiếm":        (21.0285, 105.8542),
-    "ba đình":          (21.0380, 105.8353),
-    "hà nội":           (21.0278, 105.8342),
-    "hồ chí minh":      (10.8231, 106.6297),
-    "đà nẵng":          (16.0544, 108.2022),
-}
+def parse_excel_data(df):
+    """
+    Hàm tự động quét tìm các cột chứa từ khóa vĩ độ / kinh độ 
+    để xử lý linh hoạt cho mọi form file log.
+    """
+    lat_col, lon_col, vel_col = None, None, None
+    
+    for col in df.columns:
+        col_str = str(col).lower()
+        if 'vĩ độ' in col_str or 'latitude' in col_str or 'lat' in col_str:
+            lat_col = col
+        elif 'kinh độ' in col_str or 'longitude' in col_str or 'lon' in col_str:
+            lon_col = col
+        elif 'vận tốc' in col_str or 'velocity' in col_str or 'speed' in col_str or 'mileage' in col_str:
+            vel_col = col
 
-def extract_coords_robust(text):
-    text_str = str(text).strip()
-    numbers = re.findall(r"[-+]?\d+\.?\d*", text_str)
-    floats  = [float(n) for n in numbers]
+    # Dự phòng nếu không quét được tên cột dạng Text (đọc theo index mặc định của bảng dữ liệu)
+    if lat_col is None or lon_col is None:
+        lat_col = df.columns[2] if len(df.columns) > 2 else df.columns[0]
+        lon_col = df.columns[3] if len(df.columns) > 3 else df.columns[1]
+    if vel_col is None:
+        vel_col = df.columns[-1]
 
-    valid_pairs = [
-        (floats[i], floats[i+1])
-        for i in range(len(floats)-1)
-        if -90 <= floats[i] <= 90 and -180 <= floats[i+1] <= 180
-    ]
-    if valid_pairs:
-        return valid_pairs[0]
+    # Làm sạch dữ liệu, lọc bỏ các dòng trống coordinates
+    cleaned_rows = []
+    for idx, row in df.iterrows():
+        try:
+            lat_val = float(str(row[lat_col]).replace(',', '').strip())
+            lon_val = float(str(row[lon_col]).replace(',', '').strip())
+            
+            # Đọc vận tốc
+            vel_str = re.findall(r"[-+]?\d+\.?\d*", str(row[vel_col]))
+            vel_val = float(vel_str[0]) if vel_str else 0.0
+            
+            cleaned_rows.append({
+                "lat": lat_val,
+                "lon": lon_val,
+                "velocity": vel_val,
+                "altitude": idx * 12, # Tạo cao độ tăng dần cho map 3D sinh động
+                "step": idx,
+                "label": f"Điểm thứ {idx + 1}"
+            })
+        except ValueError:
+            continue # Bỏ qua dòng tiêu đề phụ hoặc dòng trống chữ
 
-    lower = text_str.lower()
-    for key, coords in ADDRESS_MAP.items():
-        if key in lower:
-            return coords
-
-    return (21.0278, 105.8342)  
-
-
-def extract_velocity(text):
-    matches = re.findall(r"[-+]?\d+\.?\d*", str(text))
-    return float(matches[0]) if matches else 0.0
-
-
-def build_route_3d(df, coord_col_idx=5, n_points=None):
-    rows = []
-    for i, (_, row) in enumerate(df.iterrows()):
-        lat, lon = extract_coords_robust(row.iloc[coord_col_idx])
-        altitude = i * 15  
-        rows.append({"lat": lat, "lon": lon, "altitude": altitude, "step": i})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(cleaned_rows)
 
 
 # ─────────────────────────────────────────────
-# PHẦN 4: PYDECK 3D MAP
+# PHẦN 4: PYDECK 3D MAP MULTI-POINTS
 # ─────────────────────────────────────────────
 def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, std_lat, std_lon):
+    # Lớp 1: Hiển thị toàn bộ các điểm từ file dữ liệu lên bản đồ dưới dạng khối Hexagon 3D
     hex_layer = pdk.Layer(
         "HexagonLayer",
         data=route_df,
@@ -166,7 +169,7 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, s
         get_elevation="altitude",
         elevation_scale=8,
         elevation_range=[0, 3000],
-        radius=80,
+        radius=40,
         pickable=True,
         extruded=True,
         color_range=[
@@ -175,10 +178,11 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, s
             [0,  180, 150, 200],
             [200, 200,  0, 220],
             [220, 100,  0, 220],
-            [180,   0,  0, 240],
+            [180,   0,   0, 240],
         ],
     )
 
+    # Lớp 2: Vẽ đường nối liền mạch hành trình chạy qua toàn bộ danh sách điểm
     path_data = [{"path": [[r.lon, r.lat] for _, r in route_df.iterrows()]}]
     path_layer = pdk.Layer(
         "PathLayer",
@@ -188,13 +192,24 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, s
         width_min_pixels=3,
     )
 
-    points_data = [
-        {"lat": origin_lat, "lon": origin_lon, "color": [20, 20, 20, 255],   "radius": 120, "label": "Điểm mất dấu"},
-        {"lat": target_lat, "lon": target_lon, "color": [255, 50,  50, 255], "radius": 150, "label": "Tâm Datum (XGBoost)"},
-    ]
-    scatter_layer = pdk.Layer(
+    # Lớp 3: Đánh dấu chi tiết tất cả các điểm tọa độ từ dữ liệu đầu vào lên bản đồ
+    points_layer = pdk.Layer(
         "ScatterplotLayer",
-        data=points_data,
+        data=route_df,
+        get_position=["lon", "lat"],
+        get_fill_color=[0, 229, 255, 200], # Màu xanh neon đặc trưng của app
+        get_radius=50,
+        pickable=True,
+    )
+
+    # Đánh dấu 2 điểm chốt yếu: Điểm bắt đầu mất tín hiệu và Điểm dự đoán của AI
+    marker_data = [
+        {"lat": origin_lat, "lon": origin_lon, "color": [20, 20, 20, 255],   "radius": 100, "label": "Điểm mất dấu cuối cùng"},
+        {"lat": target_lat, "lon": target_lon, "color": [255, 50,  50, 255], "radius": 120, "label": "Tâm Datum dự báo (XGBoost)"},
+    ]
+    target_layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=marker_data,
         get_position=["lon", "lat"],
         get_fill_color="color",
         get_radius="radius",
@@ -215,8 +230,8 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, s
     ring_95  = make_ring(target_lat, target_lon, std_lat * 1.96, std_lon * 1.96)
 
     rings_data = [
-        {"path": ring_68,  "color": [255, 200, 0, 220], "name": "68% confidence"},
-        {"path": ring_95,  "color": [255, 80,  0, 160], "name": "95% confidence"},
+        {"path": ring_68,  "color": [255, 200, 0, 220], "name": "Vùng tin cậy 68%"},
+        {"path": ring_95,  "color": [255, 80,  0, 160], "name": "Vùng tin cậy 95%"},
     ]
     ring_layer = pdk.Layer(
         "PathLayer",
@@ -229,13 +244,13 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, s
     view_state = pdk.ViewState(
         latitude=(origin_lat + target_lat) / 2,
         longitude=(origin_lon + target_lon) / 2,
-        zoom=13,
+        zoom=14,
         pitch=55,
         bearing=15,
     )
 
     deck = pdk.Deck(
-        layers=[hex_layer, path_layer, scatter_layer, ring_layer],
+        layers=[hex_layer, path_layer, points_layer, target_layer, ring_layer],
         initial_view_state=view_state,
         map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         tooltip={"text": "{label}\n{name}"},
@@ -350,7 +365,7 @@ div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transfor
 st.markdown("""
 <h1 style="font-size:1.6rem; margin-bottom:4px;">
     🚨 HỆ THỐNG CỨU HỘ AI — TÍCH HỢP ĐỊA HÌNH & THỜI TIẾT
-    <span class="model-badge">XGBoost v2 + 3D Pydeck</span>
+    <span class="model-badge">Algorithm v2 + 3D Pydeck</span>
 </h1>
 <p style="color:#5a8ab0; font-size:0.85rem; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
     Real-time Weather · Drift Prediction · Uncertainty Ellipse · 3D Terrain Heatmap
@@ -363,13 +378,13 @@ for key in ['analysis_active', 'model_lat', 'model_lon', 'model_trained']:
         st.session_state[key] = False
 
 if not st.session_state.model_trained:
-    with st.spinner("⚙️ Đang khởi tạo mô hình XGBoost (chỉ lần đầu)..."):
+    with st.spinner("⚙️ Đang khởi tạo mô hình AI (chỉ lần đầu)..."):
         ml, mln = train_xgboost_model()
         st.session_state.model_lat = ml
         st.session_state.model_lon = mln
         st.session_state.model_trained = True
     if XGBOOST_AVAILABLE:
-        st.success("Model XGBoost đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
+        st.success("Model AI đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
     else:
         st.warning("⚠️ XGBoost chưa cài (`pip install xgboost`) — đang dùng mô hình vật lý dự phòng.")
 
@@ -378,11 +393,19 @@ st.sidebar.markdown("## 📂 Dữ liệu đầu vào")
 uploaded_file = st.sidebar.file_uploader("Tải file dữ liệu Trip Report ", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+    # Đọc tệp và bóc tách danh sách toàn bộ tọa độ
+    raw_df = pd.read_excel(uploaded_file)
+    route_df = parse_excel_data(raw_df)
 
-    latest   = df.iloc[0]
-    lat, lon = extract_coords_robust(latest.iloc[5])
-    velocity = extract_velocity(latest.iloc[9])
+    if not route_df.empty:
+        # Lấy điểm mất tín hiệu cuối cùng (Dòng cuối hoặc dòng đầu tùy cấu trúc log file)
+        latest_point = route_df.iloc[0] 
+        lat = latest_point["lat"]
+        lon = latest_point["lon"]
+        velocity = latest_point["velocity"]
+    else:
+        st.sidebar.error("❌ Không tìm thấy cột chứa dữ liệu tọa độ hợp lệ!")
+        st.stop()
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🌍 Môi trường thực tế")
@@ -420,7 +443,7 @@ if uploaded_file is not None:
 
     if st.session_state.analysis_active:
         with st.status("🛰️ Đang quét dữ liệu đa tầng...", expanded=True) as status:
-            st.write("🔄 Nạp mô hình XGBoost...")
+            st.write("🔄 Nạp mô hình thuật toán dự báo...")
             time.sleep(0.4)
             st.write("🌡️ Đọc chỉ số thời tiết thực tế...")
             time.sleep(0.3)
@@ -448,7 +471,7 @@ if uploaded_file is not None:
 
         st.markdown(f"""
 <div class="warning-box">
-<h3 style="color:#ff4b2b; margin-top:0; font-weight:700;">TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#666;">(XGBoost + Bootstrap)</span></h3>
+<h3 style="color:#ff4b2b; margin-top:0; font-weight:700;">TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#666;">(AI Engine + Bootstrap)</span></h3>
 <p>📌 <b>Tọa độ có xác suất cao nhất:</b> <code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:#ff4b2b !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
 <p>📐 <b>Vùng dự báo 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp; <b>95%:</b> ~<b>{radius_95_m} m</b></p>
 <p><b>Vùng di chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
@@ -465,7 +488,7 @@ if uploaded_file is not None:
         st.code(f"LAT: {new_lat:.6f}   LON: {new_lon:.6f}   [±{radius_68_m}m @ 68% | ±{radius_95_m}m @ 95%]", language="text")
 
         if XGBOOST_AVAILABLE and st.session_state.model_lat is not None:
-            with st.expander("📊 Feature Importance — XGBoost (Lat model)"):
+            with st.expander("📊 Feature Importance — AI (Lat model)"):
                 fi = st.session_state.model_lat.feature_importances_
                 fi_df = pd.DataFrame({
                     "Feature":    ["Vận tốc (km/h)", "Sức gió (m/s)", "Hướng gió (°)", "Thời gian (phút)", "Nhiệt độ (°C)"],
@@ -474,30 +497,25 @@ if uploaded_file is not None:
                 st.bar_chart(fi_df.set_index("Feature")["Importance"])
 
         st.divider()
-        st.subheader("🗺️ Bản đồ vệ tinh 3D — Lộ trình & Vùng xác suất")
-
-        route_df = build_route_3d(df, coord_col_idx=5)
-        if route_df.empty or len(route_df) < 2:
-            route_df = pd.DataFrame([{"lat": lat, "lon": lon, "altitude": 0, "step": 0}])
+        st.subheader("🗺️ Bản đồ vệ tinh 3D — Toàn bộ hành trình & Vùng xác suất")
 
         deck = build_pydeck_map(route_df, lat, lon, new_lat, new_lon, std_lat, std_lon)
         st.pydeck_chart(deck)
 
         st.markdown("""
 <p style="font-size:0.78rem; color:#5a7a9a; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
-🟡 Đường vàng: Lộ trình &nbsp;|&nbsp; ⚫ Điểm đen: Mất dấu &nbsp;|&nbsp; 🔴 Điểm đỏ: Tâm Datum &nbsp;|&nbsp;
-🟡 Vòng vàng: 68% &nbsp;|&nbsp; 🟠 Vòng cam: 95% &nbsp;|&nbsp; Cột màu: Heatmap tích lũy cao độ
+🟡 Đường vàng: Lộ trình &nbsp;|&nbsp; 🔵 Chấm xanh neon: Toàn bộ điểm tọa độ log &nbsp;|&nbsp; ⚫ Điểm đen: Vị trí mất dấu cuối cùng &nbsp;|&nbsp; 🔴 Điểm đỏ: Tâm Datum dự tính &nbsp;|&nbsp;
+🟡 Vòng vàng: 68% &nbsp;|&nbsp; 🟠 Vòng cam: 95% &nbsp;|&nbsp; Cột màu: Khối cao độ 3D tích lũy hành trình
 </p>
 """, unsafe_allow_html=True)
 
 else:
-    # ── ĐỔI DÒNG CHỮ THÀNH MÀU ĐEN (style="color:#000000;") THEO YÊU CẦU ──
     st.markdown("""
 <div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
     <h2 style="color:#000000; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
     <p style="color:#4a7a9b; max-width:600px; margin:0 auto 15px auto; line-height:1.6;">
-        Hệ thống sẽ tự động bóc tách tọa độ, kết nối thời tiết thực tế,
-        chạy mô hình <b>XGBoost</b> và hiển thị bản đồ vệ tinh <b>3D Pydeck</b>
+        Hệ thống sẽ tự động bóc tách tọa độ đa điểm, kết nối thời tiết thực tế,
+        chạy mô hình <b>AI Engine</b> và hiển thị bản đồ vệ tinh <b>3D Pydeck</b>
         với vùng xác suất <b>68% & 95%</b>.
     </p>
 </div>
