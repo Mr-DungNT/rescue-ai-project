@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import re
@@ -7,8 +8,6 @@ import requests
 import numpy as np
 import pydeck as pdk
 import json
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut
 
 # ─────────────────────────────────────────────
 # PHẦN 1: ML ENGINE — XGBoost + Synthetic Data
@@ -109,19 +108,23 @@ def get_realtime_weather(lat, lon):
 
 
 # ─────────────────────────────────────────────
-# PHẦN 3: DATA INGESTION — Geopy + Robust Processing
+# PHẦN 3: DATA INGESTION — Xử lý Excel bền vững
 # ─────────────────────────────────────────────
-# Khởi tạo tác vụ Định vị Toạ độ từ Địa chỉ (Geocoding)
-geolocator = Nominatim(user_agent="neosar_rescue_intelligence")
+ADDRESS_MAP = {
+    "đại cồ việt":      (21.0032, 105.8430),
+    "trần đại nghĩa":   (21.0022, 105.8430),
+    "hoàn kiếm":        (21.0285, 105.8542),
+    "ba đình":          (21.0380, 105.8353),
+    "hà nội":           (21.0278, 105.8342),
+    "hồ chí minh":      (10.8231, 106.6297),
+    "đà nẵng":          (16.0544, 108.2022),
+}
 
 def extract_coords_robust(text):
     text_str = str(text).strip()
-    if not text_str or text_str.lower() == "nan" or text_str == "--":
-        return (21.0278, 105.8342) # Mặc định Hà Nội nếu dòng rỗng
-
-    # --- TẦNG 1: Sử dụng Regex bóc tách nếu ô dữ liệu có chứa sẵn toạ độ số ---
     numbers = re.findall(r"[-+]?\d+\.?\d*", text_str)
     floats  = [float(n) for n in numbers]
+
     valid_pairs = [
         (floats[i], floats[i+1])
         for i in range(len(floats)-1)
@@ -130,30 +133,7 @@ def extract_coords_robust(text):
     if valid_pairs:
         return valid_pairs[0]
 
-    # --- TẦNG 2: Sử dụng Geopy dịch chuỗi chữ địa chỉ tiếng Việt ra Toạ độ độ rộng ---
-    try:
-        # Giới hạn tìm kiếm trong nước Việt Nam (vn) để tăng tốc và tăng độ chính xác
-        location = geolocator.geocode(text_str, timeout=4, country_codes="vn")
-        if location:
-            return (location.latitude, location.longitude)
-    except (GeocoderTimedOut, Exception):
-        pass # Chuyển xuống tầng 3 nếu lỗi mạng hoặc hết thời gian phản hồi
-
-    # --- TẦNG 3: Từ điển ánh xạ Offline (Dự phòng thông minh cho lộ trình thực nghiệm) ---
     lower = text_str.lower()
-    ADDRESS_MAP = {
-        "cầu nguyễn kiệu":       (10.758412, 106.697453), # Phường 1, Quận 4
-        "sương nguyệt ánh":      (10.772154, 106.690842), # Cộng Cà Phê, Quận 1
-        "ga quốc nội":           (10.816345, 106.662285), # Tân Bình, HCM
-        "tân sơn nhất":          (10.818463, 106.658824), # Sân bay Tân Sơn Nhất
-        "nhà ga nội địa t1":     (21.221254, 105.807142), # Sóc Sơn, Hà Nội
-        "trần đại nghĩa":        (21.002241, 105.843012), # Hai Bà Trưng, Hà Nội
-        "đại cồ việt":           (21.003200, 105.843000),
-        "hoàn kiếm":             (21.028500, 105.854200),
-        "ba đình":               (21.038000, 105.835300),
-        "đà nẵng":               (16.054400, 108.202200),
-    }
-    
     for key, coords in ADDRESS_MAP.items():
         if key in lower:
             return coords
@@ -401,9 +381,8 @@ if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
 
     latest   = df.iloc[0]
-    # Thực hiện bóc tách toạ độ (chấp nhận cả ô text địa chỉ chữ hoặc ô số GPS)
-    lat, lon = extract_coords_robust(latest.iloc[2] if len(latest) > 2 else latest.iloc[0])
-    velocity = extract_velocity(latest.iloc[6] if len(latest) > 6 else latest.iloc[0])
+    lat, lon = extract_coords_robust(latest.iloc[5])
+    velocity = extract_velocity(latest.iloc[9])
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🌍 Môi trường thực tế")
@@ -497,9 +476,7 @@ if uploaded_file is not None:
         st.divider()
         st.subheader("🗺️ Bản đồ vệ tinh 3D — Lộ trình & Vùng xác suất")
 
-        # Đọc toàn bộ các dòng địa chỉ để chuyển đổi sang DataFrame toạ độ vẽ bản đồ 3D
-        # Chỉ định chỉ số cột thứ 2 (Cột Start mang thông tin địa danh hành trình)
-        route_df = build_route_3d(df, coord_col_idx=2)
+        route_df = build_route_3d(df, coord_col_idx=5)
         if route_df.empty or len(route_df) < 2:
             route_df = pd.DataFrame([{"lat": lat, "lon": lon, "altitude": 0, "step": 0}])
 
@@ -514,6 +491,7 @@ if uploaded_file is not None:
 """, unsafe_allow_html=True)
 
 else:
+    # ── ĐỔI DÒNG CHỮ THÀNH MÀU ĐEN (style="color:#000000;") THEO YÊU CẦU ──
     st.markdown("""
 <div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
     <h2 style="color:#000000; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
