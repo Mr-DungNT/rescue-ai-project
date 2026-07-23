@@ -365,9 +365,9 @@ div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transfor
 st.markdown("""
 <h1 style="font-size:1.6rem; margin-bottom:4px;">
     AI PATHFIDING - DỰ ĐOÁN VỊ TRÍ THIẾT BỊ
-    <span class="model-badge">Algorithm v2 + 3D Pydeck</span>
+<span class="model-badge" style="color:#000000;">Algorithm v2 + 3D Pydeck</span>
 </h1>
-<p style="color:#5a8ab0; font-size:0.85rem; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
+<p style="color:#000000; font-size:0.85rem; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
     Real-time Weather · Drift Prediction · Uncertainty Ellipse · 3D Terrain Heatmap
 </p>
 """, unsafe_allow_html=True)
@@ -408,30 +408,30 @@ if uploaded_file is not None:
         st.stop()
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🌍 Môi trường thực tế")
+    st.sidebar.markdown("###  Môi trường thực tế")
     weather = get_realtime_weather(lat, lon)
 
     if weather:
         st.sidebar.success(f"📍 `{lat:.5f}, {lon:.5f}`")
         c1, c2 = st.sidebar.columns(2)
-        c1.metric("🌡️ Nhiệt độ", f"{weather['temp']}°C")
-        c2.metric("💧 Lượng mưa", f"{weather['rain']} mm/h")
-        st.sidebar.write(f"🌬️ Gió: **{weather['wind_speed']} m/s** — hướng **{weather['wind_deg']}°**")
-        st.sidebar.write(f"👁️ Tầm nhìn: **{weather['visibility']} km** | {weather['description'].capitalize()}")
+        c1.metric(" Nhiệt độ", f"{weather['temp']}°C")
+        c2.metric(" Lượng mưa", f"{weather['rain']} mm/h")
+        st.sidebar.write(f" Gió: **{weather['wind_speed']} m/s** — hướng **{weather['wind_deg']}°**")
+        st.sidebar.write(f" Tầm nhìn: **{weather['visibility']} km** | {weather['description'].capitalize()}")
         wind_speed = weather['wind_speed']
         wind_dir   = weather['wind_deg']
         temp_c     = weather['temp']
     else:
-        st.sidebar.warning("⚠️ Dùng dữ liệu dự phòng")
+        st.sidebar.warning(" Dùng dữ liệu dự phòng")
         wind_speed, wind_dir, temp_c = 5.0, 45.0, 25.0
 
     time_lost = st.sidebar.slider("⏱️ Thời gian mất tín hiệu (phút)", 5, 120, 30)
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🚗 Vận tốc TB",        f"{velocity} km/h")
-    col2.metric("🌬️ Sức gió",           f"{wind_speed} m/s")
-    col3.metric("🌡️ Nhiệt độ",          f"{temp_c}°C")
-    col4.metric("⏱️ Mất tín hiệu",      f"{time_lost} mins")
+    col1.metric(" Vận tốc TB",        f"{velocity} km/h")
+    col2.metric(" Sức gió",           f"{wind_speed} m/s")
+    col3.metric(" Nhiệt độ",          f"{temp_c}°C")
+    col4.metric(" Mất tín hiệu",      f"{time_lost} mins")
 
     st.sidebar.markdown("---")
     st.divider()
@@ -443,15 +443,15 @@ if uploaded_file is not None:
 
     if st.session_state.analysis_active:
         with st.status("🛰️ Đang quét dữ liệu đa tầng...", expanded=True) as status:
-            st.write("🔄 Nạp mô hình thuật toán dự báo...")
+            st.write(" Nạp mô hình thuật toán ...")
             time.sleep(0.4)
-            st.write("🌡️ Đọc chỉ số thời tiết thực tế...")
+            st.write( Đọc chỉ số thời tiết thực tế...")
             time.sleep(0.3)
-            st.write("🧮 Chạy Bootstrap Ensemble (100 lần)...")
+            st.write("Chạy Bootstrap Ensemble...")
             time.sleep(0.5)
-            st.write("📐 Tính toán vùng xác suất 68% & 95%...")
+            st.write("📐 Tính toán vùng xác suất ...")
             time.sleep(0.3)
-            status.update(label="✅ Phân tích hoàn tất!", state="complete")
+            status.update(label="Phân tích hoàn tất!", state="complete")
 
         features = [velocity, wind_speed, wind_dir, time_lost, temp_c]
         d_lat, d_lon, std_lat, std_lon = predict_with_uncertainty(
@@ -479,8 +479,8 @@ if uploaded_file is not None:
 <div class="success-box">
 <h3 style="color:#00c853; margin-top:0; font-weight:700;">PHÂN TÍCH CHUYÊN MÔN</h3>
 <p> <b>Thời gian vàng:</b> <b style="color:#1d1d1f;">{survival_time}</b> (nhiệt độ dự báo ~{water_temp:.1f}°C)</p>
-<p><b>Rủi ro hạ thân nhiệt:</> <b style="color:#ff4b2b;">{"🚨 CAO — cần ưu tiên sưởi ấm ngay" if is_cold else " Thấp- Nằm trong ngưỡng an toàn"}</b></p>
-<p> <b>Lượng mưa:</b> <b style="color:#1d1d1f;">{"⚠️ Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else " Thấp, tầm nhìn ổn định - triển khai phương án cơ động tiếp cận và cứu hộ trực tiếp"}</b></p>
+<p><b>Rủi ro hạ thân nhiệt:</> <b style="color:#ff4b2b;">{"CAO — cần ưu tiên sưởi ấm ngay" if is_cold else " Thấp- Nằm trong ngưỡng an toàn"}</b></p>
+<p> <b>Lượng mưa:</b> <b style="color:#1d1d1f;">{"Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else " Thấp, tầm nhìn ổn định - triển khai phương án cơ động tiếp cận và cứu hộ trực tiếp"}</b></p>
 <p><b>Chiến thuật đề xuất:</b> Triển khai tìm kiếm theo hình xoắn ốc mở rộng từ tâm tọa độ ưu tiên, ưu tiên vùng 68%.</p>
 </div>
 """, unsafe_allow_html=True)
@@ -497,7 +497,7 @@ if uploaded_file is not None:
                 st.bar_chart(fi_df.set_index("Feature")["Importance"])
 
         st.divider()
-        st.subheader("🗺️ Bản đồ vệ tinh 3D — Toàn bộ hành trình & Vùng xác suất")
+        st.subheader("Bản đồ vệ tinh 3D — Toàn bộ hành trình & Vùng xác suất")
 
         deck = build_pydeck_map(route_df, lat, lon, new_lat, new_lon, std_lat, std_lon)
         st.pydeck_chart(deck)
@@ -512,11 +512,9 @@ if uploaded_file is not None:
 else:
     st.markdown("""
 <div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
-    <h2 style="color:#000000; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;">⬅️ TẢI FILE DỮ LIỆU ĐỂ BẮT ĐẦU</h2>
+    <h2 style="color:#000000; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;"></h2>
     <p style="color:#4a7a9b; max-width:600px; margin:0 auto 15px auto; line-height:1.6;">
-        Hệ thống sẽ tự động bóc tách tọa độ đa điểm, kết nối thời tiết thực tế,
-        chạy mô hình <b>AI Engine</b> và hiển thị bản đồ vệ tinh <b>3D Pydeck</b>
-        với vùng xác suất <b>68% & 95%</b>.
+        Phát triển bởi đội ngũ NeoSAR.
     </p>
 </div>
 """, unsafe_allow_html=True)
