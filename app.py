@@ -264,114 +264,195 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, s
 st.set_page_config(
     page_title="AI Rescue System v2",
     layout="wide",
-    page_icon=""
+    page_icon="🛰️",
+    initial_sidebar_state="expanded",
 )
 
+# ── CSS: Thiết kế lại toàn bộ giao diện theo 1 hệ màu thống nhất (Light / Ops-room) ──
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;600;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root{
+    --ink:        #0f172a;
+    --ink-soft:   #475569;
+    --line:       #e2e8f0;
+    --surface:    #ffffff;
+    --bg:         #f4f6fb;
+    --accent:     #0f6fff;
+    --accent-soft:#eaf2ff;
+    --danger:     #e0483e;
+    --danger-soft:#fdecea;
+    --success:    #17a673;
+    --success-soft:#e8f8f2;
+}
 
 html, body, [class*="css"] {
-    font-family: 'Exo 2', sans-serif;
-    background-color: #080f1a;
-    color: #c8d8e8;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg);
+    color: var(--ink);
 }
 
-h1, h2, h3 { 
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif !important; 
-    color: #00e5ff; 
-    letter-spacing: 1px; 
-}
+/* Ẩn khoảng trắng thừa trên cùng của khối main */
+.block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1200px; }
 
-.stMetric { 
-    background: #ffffff !important; 
-    border: 1px solid #d2d2d7 !important; 
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+    background-color: var(--ink);
+    border-right: 1px solid var(--line);
+}
+section[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
+section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #ffffff !important; font-weight: 700; }
+section[data-testid="stSidebar"] hr { border-color: #ffffff22; }
+[data-testid="stSidebar"] div[data-testid="stFileUploaderDropzone"] {
+    background-color: #1e293b !important;
+    border: 1px dashed #475569 !important;
     border-radius: 10px !important;
-    padding: 14px !important; 
-    border-left: 5px solid #00e5ff !important; 
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
-.stMetric label { color: #515154 !important; font-size: 0.8rem !important; font-weight: 500; }
-.stMetric [data-testid="stMetricValue"] { color: #1d1d1f !important; font-weight: 800; font-size: 1.6rem !important; }
+[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+    background-color: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #ffffff !important;
+}
 
+/* ── Tiêu đề ── */
+h1, h2, h3 { font-family: 'Inter', sans-serif !important; color: var(--ink); letter-spacing: -0.2px; }
+
+.hero {
+    background: linear-gradient(135deg, var(--ink) 0%, #1e3a5f 100%);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 22px;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.18);
+}
+.hero h1 {
+    color: #ffffff !important;
+    font-size: 1.65rem;
+    font-weight: 800;
+    margin: 0 0 6px 0;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.hero p {
+    color: #cbd5e1;
+    font-size: 0.92rem;
+    margin: 0;
+}
+.model-badge {
+    display: inline-block; background: #ffffff18;
+    border: 1px solid #5aa9ff; border-radius: 20px;
+    padding: 3px 14px; font-size: 0.72rem; color: #7cc4ff !important;
+    font-family: 'Share Tech Mono', monospace; font-weight: 400;
+    letter-spacing: 0.5px;
+}
+
+/* ── Card chung ── */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+}
+.card h3 { margin-top: 0; font-size: 1.05rem; font-weight: 700; }
+.section-title {
+    font-size: 1.15rem; font-weight: 700; color: var(--ink);
+    margin: 6px 0 14px 0; display:flex; align-items:center; gap:8px;
+}
+
+/* ── Metric ── */
+.stMetric { 
+    background: var(--surface) !important; 
+    border: 1px solid var(--line) !important; 
+    border-radius: 12px !important;
+    padding: 14px 16px !important; 
+    border-left: 4px solid var(--accent) !important; 
+    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+}
+.stMetric label { color: var(--ink-soft) !important; font-size: 0.78rem !important; font-weight: 500; }
+.stMetric [data-testid="stMetricValue"] { color: var(--ink) !important; font-weight: 800; font-size: 1.5rem !important; }
+
+/* ── Input trong nội dung chính ── */
 div[data-testid="stNumberInput"] div,
 div[data-testid="stTextInput"] div,
 .stSlider div,
-[data-testid="stSidebar"] div[data-baseweb="select"] > div,
 div[data-testid="stFileUploaderDropzone"] {
-    background-color: #ffffff !important;
-    color: #1d1d1f !important;
-    border: 1px solid #d2d2d7 !important;
+    background-color: var(--surface) !important;
+    color: var(--ink) !important;
     border-radius: 8px !important;
 }
-
 div[data-testid="stNumberInput"] input, 
 div[data-testid="stTextInput"] input {
-    color: #1d1d1f !important;
+    color: var(--ink) !important;
     font-weight: 500;
 }
 
+/* ── Nút bấm chính ── */
 div.stButton > button {
-    background: linear-gradient(135deg, #ff4b2b, #ff416c);
-    color: white; border: none; border-radius: 6px;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 1rem; padding: 12px 28px;
-    box-shadow: 0 0 20px rgba(255,75,43,0.5);
-    transition: all 0.3s ease;
+    background: linear-gradient(135deg, var(--danger), #ff6a5f);
+    color: white; border: none; border-radius: 8px;
+    font-family: 'Inter', sans-serif; font-weight: 600;
+    font-size: 0.95rem; padding: 12px 28px;
+    box-shadow: 0 4px 14px rgba(224,72,62,0.35);
+    transition: all 0.2s ease;
+    width: 100%;
 }
-div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transform: scale(1.03); }
+div.stButton > button:hover { box-shadow: 0 6px 20px rgba(224,72,62,0.5); transform: translateY(-1px); }
 
+/* ── Hộp cảnh báo / kết quả ── */
 .warning-box {
-    background: #ffffff !important; 
-    border: 1px solid #d2d2d7 !important;
-    border-left: 6px solid #ff4b2b !important; 
-    border-radius: 10px !important;
-    padding: 22px; 
-    margin: 16px 0; 
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-    color: #1d1d1f !important;
+    background: var(--surface) !important; 
+    border: 1px solid var(--line) !important;
+    border-left: 5px solid var(--danger) !important; 
+    border-radius: 12px !important;
+    padding: 22px 24px; 
+    margin: 0 0 16px 0; 
+    box-shadow: 0 2px 10px rgba(15,23,42,0.05);
+    color: var(--ink) !important;
 }
-.warning-box p, .warning-box b, .warning-box code {
-    color: #1d1d1f !important;
-}
+.warning-box h3 { color: var(--danger) !important; }
+.warning-box p, .warning-box b, .warning-box code { color: var(--ink) !important; }
 
 .success-box {
-    background: #ffffff !important; 
-    border: 1px solid #d2d2d7 !important;
-    border-left: 6px solid #00e676 !important; 
-    border-radius: 10px !important;
-    padding: 22px; 
-    margin: 16px 0;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-    color: #1d1d1f !important;
+    background: var(--surface) !important; 
+    border: 1px solid var(--line) !important;
+    border-left: 5px solid var(--success) !important; 
+    border-radius: 12px !important;
+    padding: 22px 24px; 
+    margin: 0 0 16px 0;
+    box-shadow: 0 2px 10px rgba(15,23,42,0.05);
+    color: var(--ink) !important;
 }
-.success-box p, .success-box b {
-    color: #515154 !important;
+.success-box h3 { color: var(--success) !important; }
+.success-box p, .success-box b { color: var(--ink-soft) !important; }
+
+/* ── Chú thích bản đồ ── */
+.map-legend {
+    font-size: 0.8rem; color: var(--ink-soft);
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 16px; margin-top: 10px;
 }
 
-.model-badge {
-    display: inline-block; background: #00e5ff22;
-    border: 1px solid #00e5ff; border-radius: 20px;
-    padding: 2px 12px; font-size: 0.78rem; color: #00e5ff;
-    font-family: 'Share Tech Mono', monospace; margin-left: 10px;
+/* ── Trạng thái rỗng (chưa upload file) ── */
+.empty-state {
+    text-align: center; padding: 48px 24px;
+    background: var(--surface); border: 1px dashed var(--line);
+    border-radius: 16px;
 }
+.empty-state h2 { color: var(--ink); font-weight: 700; margin-bottom: 8px; }
+.empty-state p { color: var(--ink-soft); max-width: 520px; margin: 0 auto; line-height: 1.6; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Header ──
 st.markdown("""
-<h1 style="font-size:1.6rem; margin-bottom:4px;">
-    AI PATHFIDING - DỰ ĐOÁN VỊ TRÍ THIẾT BỊ
-<span class="model-badge" style="color:#000000;">Algorithm v2 + 3D Pydeck</span>
-</h1>
-<p style="color:#000000; font-size:0.85rem; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
-    Real-time Weather · Drift Prediction · Uncertainty Ellipse · 3D Terrain Heatmap
-</p>
+<div class="hero">
+    <h1>AI PATHFINDING — DỰ ĐOÁN VỊ TRÍ THIẾT BỊ
+        <span class="model-badge">Algorithm v2 · 3D Pydeck</span>
+    </h1>
+    <p>Real-time Weather · Drift Prediction · Uncertainty Ellipse · 3D Terrain Heatmap</p>
+</div>
 """, unsafe_allow_html=True)
-st.divider()
 
 for key in ['analysis_active', 'model_lat', 'model_lon', 'model_trained']:
     if key not in st.session_state:
@@ -384,13 +465,13 @@ if not st.session_state.model_trained:
         st.session_state.model_lon = mln
         st.session_state.model_trained = True
     if XGBOOST_AVAILABLE:
-        st.success("Model AI đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
+        st.success("✅ Model AI đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
     else:
-        st.warning("⚠️XGBoost chưa cài (`pip install xgboost`) — đang dùng mô hình vật lý dự phòng.")
+        st.warning("⚠️ XGBoost chưa cài (`pip install xgboost`) — đang dùng mô hình vật lý dự phòng.")
 
 # ── Sidebar ──
 st.sidebar.markdown("## 📂 Dữ liệu đầu vào")
-uploaded_file = st.sidebar.file_uploader("Tải file dữ liệu Trip Report ", type=["xlsx", "xls"])
+uploaded_file = st.sidebar.file_uploader("Tải file dữ liệu Trip Report", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
     # Đọc tệp và bóc tách danh sách toàn bộ tọa độ
@@ -408,50 +489,53 @@ if uploaded_file is not None:
         st.stop()
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("###  Môi trường thực tế")
+    st.sidebar.markdown("### 🌦️ Môi trường thực tế")
     weather = get_realtime_weather(lat, lon)
 
     if weather:
         st.sidebar.success(f"📍 `{lat:.5f}, {lon:.5f}`")
         c1, c2 = st.sidebar.columns(2)
-        c1.metric(" Nhiệt độ", f"{weather['temp']}°C")
-        c2.metric(" Lượng mưa", f"{weather['rain']} mm/h")
-        st.sidebar.write(f" Gió: **{weather['wind_speed']} m/s** — hướng **{weather['wind_deg']}°**")
-        st.sidebar.write(f" Tầm nhìn: **{weather['visibility']} km** | {weather['description'].capitalize()}")
+        c1.metric("Nhiệt độ", f"{weather['temp']}°C")
+        c2.metric("Lượng mưa", f"{weather['rain']} mm/h")
+        st.sidebar.write(f"💨 Gió: **{weather['wind_speed']} m/s** — hướng **{weather['wind_deg']}°**")
+        st.sidebar.write(f"👁️ Tầm nhìn: **{weather['visibility']} km** | {weather['description'].capitalize()}")
         wind_speed = weather['wind_speed']
         wind_dir   = weather['wind_deg']
         temp_c     = weather['temp']
     else:
-        st.sidebar.warning(" Dùng dữ liệu dự phòng")
+        st.sidebar.warning("⚠️ Dùng dữ liệu dự phòng")
         wind_speed, wind_dir, temp_c = 5.0, 45.0, 25.0
 
     time_lost = st.sidebar.slider("⏱️ Thời gian mất tín hiệu (phút)", 5, 120, 30)
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric(" Vận tốc TB",        f"{velocity} km/h")
-    col2.metric(" Sức gió",           f"{wind_speed} m/s")
-    col3.metric(" Nhiệt độ",          f"{temp_c}°C")
-    col4.metric(" Mất tín hiệu",      f"{time_lost} mins")
-
     st.sidebar.markdown("---")
-    st.divider()
+    st.sidebar.caption("Phát triển bởi đội ngũ NeoSAR")
 
-    st.subheader("Phân tích AI & Chiến thuật Cứu hộ")
+    # ── Tổng quan thông số ──
+    st.markdown('<div class="section-title">📊 Tổng quan thông số đầu vào</div>', unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("🏃 Vận tốc TB",     f"{velocity} km/h")
+    col2.metric("💨 Sức gió",        f"{wind_speed} m/s")
+    col3.metric("🌡️ Nhiệt độ",      f"{temp_c}°C")
+    col4.metric("⏱️ Mất tín hiệu",   f"{time_lost} mins")
 
-    if st.button("Kích hoạt AI Phân tích rủi ro & Tọa độ"):
+    st.write("")
+    st.markdown('<div class="section-title">🧠 Phân tích AI &amp; Chiến thuật Cứu hộ</div>', unsafe_allow_html=True)
+
+    if st.button("🚀 Kích hoạt AI Phân tích rủi ro & Tọa độ"):
         st.session_state.analysis_active = True
 
     if st.session_state.analysis_active:
         with st.status("🛰️ Đang quét dữ liệu đa tầng...", expanded=True) as status:
-            st.write(" Nạp mô hình thuật toán ...")
+            st.write("🔧 Nạp mô hình thuật toán...")
             time.sleep(0.4)
-            st.write( "Đọc chỉ số thời tiết thực tế...")
+            st.write("🌦️ Đọc chỉ số thời tiết thực tế...")
             time.sleep(0.3)
-            st.write("Chạy Bootstrap Ensemble...")
+            st.write("🔄 Chạy Bootstrap Ensemble...")
             time.sleep(0.5)
-            st.write("📐 Tính toán vùng xác suất ...")
+            st.write("📐 Tính toán vùng xác suất...")
             time.sleep(0.3)
-            status.update(label="Phân tích hoàn tất!", state="complete")
+            status.update(label="✅ Phân tích hoàn tất!", state="complete")
 
         features = [velocity, wind_speed, wind_dir, time_lost, temp_c]
         d_lat, d_lon, std_lat, std_lon = predict_with_uncertainty(
@@ -469,19 +553,24 @@ if uploaded_file is not None:
         is_cold       = temp_c < 20
         is_rain       = (weather['rain'] > 5) if weather else False
 
-        st.markdown(f"""
+        res_col1, res_col2 = st.columns(2, gap="medium")
+        with res_col1:
+            st.markdown(f"""
 <div class="warning-box">
-<h3 style="color:#ff4b2b; margin-top:0; font-weight:700;">TỌA ĐỘ MỤC TIÊU ƯU TIÊN  <span style="font-size:0.8rem;color:#666;">(AI Engine + Bootstrap)</span></h3>
-<p>📌 <b>Tọa độ có xác suất cao nhất:</b> <code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:#ff4b2b !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
+<h3>🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN <span style="font-size:0.75rem;color:#94a3b8;font-weight:400;">(AI Engine + Bootstrap)</span></h3>
+<p>📌 <b>Tọa độ có xác suất cao nhất:</b><br><code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:var(--danger) !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
 <p>📐 <b>Vùng dự báo 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp; <b>95%:</b> ~<b>{radius_95_m} m</b></p>
-<p><b>Vùng di chuyển: <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
+<p>🧭 <b>Vùng di chuyển:</b> <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
 </div>
+""", unsafe_allow_html=True)
+        with res_col2:
+            st.markdown(f"""
 <div class="success-box">
-<h3 style="color:#00c853; margin-top:0; font-weight:700;">PHÂN TÍCH CHUYÊN MÔN</h3>
-<p> <b>Thời gian vàng:</b> <b style="color:#1d1d1f;">{survival_time}</b> (nhiệt độ dự báo ~{water_temp:.1f}°C)</p>
-<p><b>Rủi ro hạ thân nhiệt:</> <b style="color:#ff4b2b;">{"CAO — cần ưu tiên sưởi ấm ngay" if is_cold else " Thấp- Nằm trong ngưỡng an toàn"}</b></p>
-<p> <b>Lượng mưa:</b> <b style="color:#1d1d1f;">{"Mưa lớn — giảm tầm nhìn, triển khai rada" if is_rain else " Thấp, tầm nhìn ổn định - triển khai phương án cơ động tiếp cận và cứu hộ trực tiếp"}</b></p>
-<p><b>Chiến thuật đề xuất:</b> Triển khai tìm kiếm theo hình xoắn ốc mở rộng từ tâm tọa độ ưu tiên, ưu tiên vùng 68%.</p>
+<h3>🩺 PHÂN TÍCH CHUYÊN MÔN</h3>
+<p>⏳ <b>Thời gian vàng:</b> <b style="color:var(--ink) !important;">{survival_time}</b> (nhiệt độ dự báo ~{water_temp:.1f}°C)</p>
+<p>🥶 <b>Rủi ro hạ thân nhiệt:</b> <b style="color:var(--danger) !important;">{"CAO — cần ưu tiên sưởi ấm ngay" if is_cold else "Thấp — nằm trong ngưỡng an toàn"}</b></p>
+<p>🌧️ <b>Lượng mưa:</b> <b style="color:var(--ink) !important;">{"Mưa lớn — giảm tầm nhìn, triển khai radar" if is_rain else "Thấp, tầm nhìn ổn định — triển khai phương án tiếp cận trực tiếp"}</b></p>
+<p>🧭 <b>Chiến thuật đề xuất:</b> Triển khai tìm kiếm theo hình xoắn ốc mở rộng từ tâm tọa độ ưu tiên, ưu tiên vùng 68%.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -496,29 +585,28 @@ if uploaded_file is not None:
                 }).sort_values("Importance", ascending=False)
                 st.bar_chart(fi_df.set_index("Feature")["Importance"])
 
-        st.divider()
-        st.subheader("Bản đồ vệ tinh 3D — Toàn bộ hành trình & Vùng xác suất")
+        st.write("")
+        st.markdown('<div class="section-title">🗺️ Bản đồ vệ tinh 3D — Toàn bộ hành trình &amp; Vùng xác suất</div>', unsafe_allow_html=True)
 
         deck = build_pydeck_map(route_df, lat, lon, new_lat, new_lon, std_lat, std_lon)
         st.pydeck_chart(deck)
 
         st.markdown("""
-<p style="font-size:0.78rem; color:#5a7a9a; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
-🟡 Đường vàng: Lộ trình &nbsp;|&nbsp; 🔵 Chấm xanh neon: Toàn bộ điểm tọa độ log &nbsp;|&nbsp; ⚫ Điểm đen: Vị trí mất dấu cuối cùng &nbsp;|&nbsp; 🔴 Điểm đỏ: Tâm Datum dự tính &nbsp;|&nbsp;
+<div class="map-legend">
+🟡 Đường vàng: Lộ trình &nbsp;|&nbsp; 🔵 Chấm xanh neon: Toàn bộ điểm tọa độ log &nbsp;|&nbsp; ⚫ Điểm đen: Vị trí mất dấu cuối cùng &nbsp;|&nbsp; 🔴 Điểm đỏ: Tâm Datum dự tính<br>
 🟡 Vòng vàng: 68% &nbsp;|&nbsp; 🟠 Vòng cam: 95% &nbsp;|&nbsp; Cột màu: Khối cao độ 3D tích lũy hành trình
-</p>
+</div>
 """, unsafe_allow_html=True)
 
 else:
     st.markdown("""
-<div style="text-align:center; padding: 10px 0 0 0; margin: 0;">
-    <h2 style="color:#000000; font-family:-apple-system, BlinkMacSystemFont, sans-serif; margin-bottom: 5px;"></h2>
-    <p style="color:#4a7a9b; max-width:600px; margin:0 auto 15px auto; line-height:1.6;">
-        Phát triển bởi đội ngũ NeoSAR.
-    </p>
+<div class="empty-state">
+    <h2>🛰️ Chưa có dữ liệu hành trình</h2>
+    <p>Tải lên file Trip Report (.xlsx / .xls) ở thanh bên trái để bắt đầu phân tích AI và dự đoán vị trí thiết bị.</p>
 </div>
 """, unsafe_allow_html=True)
 
+    st.write("")
     try:
         st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro", use_container_width=True)
     except Exception:
