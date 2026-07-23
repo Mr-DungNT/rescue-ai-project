@@ -264,7 +264,7 @@ def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, s
 st.set_page_config(
     page_title="AI Rescue System v2",
     layout="wide",
-    page_icon="🚨"
+    page_icon=""
 )
 
 st.markdown("""
@@ -364,7 +364,7 @@ div.stButton > button:hover { box-shadow: 0 0 35px rgba(255,75,43,0.9); transfor
 # ── Header ──
 st.markdown("""
 <h1 style="font-size:1.6rem; margin-bottom:4px;">
-    🚨 HỆ THỐNG CỨU HỘ AI — TÍCH HỢP ĐỊA HÌNH & THỜI TIẾT
+    AI PATHFIDING - DỰ ĐOÁN VỊ TRÍ THIẾT BỊ
     <span class="model-badge">Algorithm v2 + 3D Pydeck</span>
 </h1>
 <p style="color:#5a8ab0; font-size:0.85rem; font-family:-apple-system, BlinkMacSystemFont, sans-serif;">
@@ -378,7 +378,7 @@ for key in ['analysis_active', 'model_lat', 'model_lon', 'model_trained']:
         st.session_state[key] = False
 
 if not st.session_state.model_trained:
-    with st.spinner("⚙️ Đang khởi tạo mô hình AI (chỉ lần đầu)..."):
+    with st.spinner("Đang khởi tạo mô hình AI..."):
         ml, mln = train_xgboost_model()
         st.session_state.model_lat = ml
         st.session_state.model_lon = mln
@@ -386,7 +386,7 @@ if not st.session_state.model_trained:
     if XGBOOST_AVAILABLE:
         st.success("Model AI đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
     else:
-        st.warning("⚠️ XGBoost chưa cài (`pip install xgboost`) — đang dùng mô hình vật lý dự phòng.")
+        st.warning("⚠️XGBoost chưa cài (`pip install xgboost`) — đang dùng mô hình vật lý dự phòng.")
 
 # ── Sidebar ──
 st.sidebar.markdown("## 📂 Dữ liệu đầu vào")
