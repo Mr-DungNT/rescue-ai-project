@@ -1,290 +1,50 @@
-import streamlit as st
-import pandas as pd
-import re
-import time
 import math
-import requests
+import time
+
 import numpy as np
+import pandas as pd
 import pydeck as pdk
-import json
+import requests
+import streamlit as st
 
-# ─────────────────────────────────────────────
-# PHẦN 1: ML ENGINE — Algorithm + Synthetic Data
-# ─────────────────────────────────────────────
-try:
-    from xgboost import XGBRegressor
-    XGBOOST_AVAILABLE = True
-except ImportError:
-    XGBOOST_AVAILABLE = False
-
-@st.cache_resource(show_spinner=False)
-def train_xgboost_model():
-    if not XGBOOST_AVAILABLE:
-        return None, None
-
-    np.random.seed(42)
-    N = 5000  
-
-    velocity    = np.random.uniform(0, 60, N)       
-    wind_speed  = np.random.uniform(0, 25, N)       
-    wind_deg    = np.random.uniform(0, 360, N)      
-    time_lost   = np.random.uniform(5, 120, N)      
-    temp_c      = np.random.uniform(5, 40, N)       
-
-    noise = np.random.normal(1.0, 0.05, N)
-    bearing_rad = np.radians(wind_deg)
-    drift_kmh   = velocity + (wind_speed * 3.6 * 0.03)
-    offset_m    = (drift_kmh / 60) * time_lost * 1000 / 2 * noise
-
-    delta_lat = (offset_m * np.cos(bearing_rad)) / 111111
-    delta_lon = (offset_m * np.sin(bearing_rad)) / (111111 * np.cos(np.radians(21.0)))
-
-    X = np.column_stack([velocity, wind_speed, wind_deg, time_lost, temp_c])
-
-    model_lat = XGBRegressor(
-        n_estimators=200, max_depth=5, learning_rate=0.05,
-        subsample=0.8, colsample_bytree=0.8, random_state=42, verbosity=0
-    )
-    model_lon = XGBRegressor(
-        n_estimators=200, max_depth=5, learning_rate=0.05,
-        subsample=0.8, colsample_bytree=0.8, random_state=42, verbosity=0
-    )
-    model_lat.fit(X, delta_lat)
-    model_lon.fit(X, delta_lon)
-
-    return model_lat, model_lon
-
-
-def predict_with_uncertainty(model_lat, model_lon, features, n_bootstrap=100):
-    if model_lat is None:
-        velocity, wind_speed, wind_deg, time_lost, temp_c = features
-        bearing = math.radians(wind_deg)
-        drift_kmh = velocity + (wind_speed * 3.6 * 0.03)
-        offset_m = (drift_kmh / 60) * time_lost * 1000 / 2
-        d_lat = (offset_m * math.cos(bearing)) / 111111
-        d_lon = (offset_m * math.sin(bearing)) / (111111 * math.cos(math.radians(21.0)))
-        return d_lat, d_lon, abs(d_lat) * 0.1, abs(d_lon) * 0.1
-
-    feat_arr = np.array(features).reshape(1, -1)
-    lat_preds = []
-    lon_preds = []
-
-    for _ in range(n_bootstrap):
-        noisy = feat_arr * np.random.normal(1.0, 0.03, feat_arr.shape)
-        lat_preds.append(model_lat.predict(noisy)[0])
-        lon_preds.append(model_lon.predict(noisy)[0])
-
-    return (
-        float(np.mean(lat_preds)), float(np.mean(lon_preds)),
-        float(np.std(lat_preds)), float(np.std(lon_preds))
-    )
-
-
-# ─────────────────────────────────────────────
-# PHẦN 2: WEATHER API
-# ─────────────────────────────────────────────
-API_KEY = "23913db94b60da48fe4dd64dbab2344f"
-
-def get_realtime_weather(lat, lon):
-    try:
-        url = (f"https://api.openweathermap.org/data/2.5/weather"
-               f"?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=vi")
-        resp = requests.get(url, timeout=5)
-        if resp.status_code == 200:
-            d = resp.json()
-            return {
-                "wind_speed":  d['wind'].get('speed', 0),
-                "wind_deg":    d['wind'].get('deg', 0),
-                "temp":        d['main'].get('temp', 25),
-                "humidity":    d['main'].get('humidity', 70),
-                "rain":        d.get('rain', {}).get('1h', 0),
-                "description": d['weather'][0].get('description', 'N/A'),
-                "visibility":  d.get('visibility', 10000) / 1000,
-            }
-    except Exception:
-        pass
-    return None
-
-
-# ─────────────────────────────────────────────
-# PHẦN 3: DATA INGESTION — Đọc Tọa độ Đa điểm từ File
-# ─────────────────────────────────────────────
-def parse_excel_data(df):
-    """
-    Hàm tự động quét tìm các cột chứa từ khóa vĩ độ / kinh độ 
-    để xử lý linh hoạt cho mọi form file log.
-    """
-    lat_col, lon_col, vel_col = None, None, None
-    
-    for col in df.columns:
-        col_str = str(col).lower()
-        if 'vĩ độ' in col_str or 'latitude' in col_str or 'lat' in col_str:
-            lat_col = col
-        elif 'kinh độ' in col_str or 'longitude' in col_str or 'lon' in col_str:
-            lon_col = col
-        elif 'vận tốc' in col_str or 'velocity' in col_str or 'speed' in col_str or 'mileage' in col_str:
-            vel_col = col
-
-    # Dự phòng nếu không quét được tên cột dạng Text (đọc theo index mặc định của bảng dữ liệu)
-    if lat_col is None or lon_col is None:
-        lat_col = df.columns[2] if len(df.columns) > 2 else df.columns[0]
-        lon_col = df.columns[3] if len(df.columns) > 3 else df.columns[1]
-    if vel_col is None:
-        vel_col = df.columns[-1]
-
-    # Làm sạch dữ liệu, lọc bỏ các dòng trống coordinates
-    cleaned_rows = []
-    for idx, row in df.iterrows():
-        try:
-            lat_val = float(str(row[lat_col]).replace(',', '').strip())
-            lon_val = float(str(row[lon_col]).replace(',', '').strip())
-            
-            # Đọc vận tốc
-            vel_str = re.findall(r"[-+]?\d+\.?\d*", str(row[vel_col]))
-            vel_val = float(vel_str[0]) if vel_str else 0.0
-            
-            cleaned_rows.append({
-                "lat": lat_val,
-                "lon": lon_val,
-                "velocity": vel_val,
-                "altitude": idx * 12, # Tạo cao độ tăng dần cho map 3D sinh động
-                "step": idx,
-                "label": f"Điểm thứ {idx + 1}"
-            })
-        except ValueError:
-            continue # Bỏ qua dòng tiêu đề phụ hoặc dòng trống chữ
-
-    return pd.DataFrame(cleaned_rows)
-
-
-# ─────────────────────────────────────────────
-# PHẦN 4: PYDECK 3D MAP MULTI-POINTS
-# ─────────────────────────────────────────────
-def build_pydeck_map(route_df, origin_lat, origin_lon, target_lat, target_lon, std_lat, std_lon):
-    # Lớp 1: Hiển thị toàn bộ các điểm từ file dữ liệu lên bản đồ dưới dạng khối Hexagon 3D
-    hex_layer = pdk.Layer(
-        "HexagonLayer",
-        data=route_df,
-        get_position=["lon", "lat"],
-        get_elevation="altitude",
-        elevation_scale=8,
-        elevation_range=[0, 3000],
-        radius=40,
-        pickable=True,
-        extruded=True,
-        color_range=[
-            [0,   40, 120, 200],
-            [0,   90, 180, 200],
-            [0,  180, 150, 200],
-            [200, 200,  0, 220],
-            [220, 100,  0, 220],
-            [180,   0,   0, 240],
-        ],
-    )
-
-    # Lớp 2: Vẽ đường nối liền mạch hành trình chạy qua toàn bộ danh sách điểm
-    path_data = [{"path": [[r.lon, r.lat] for _, r in route_df.iterrows()]}]
-    path_layer = pdk.Layer(
-        "PathLayer",
-        data=path_data,
-        get_path="path",
-        get_color=[255, 220, 0, 200],
-        width_min_pixels=3,
-    )
-
-    # Lớp 3: Đánh dấu chi tiết tất cả các điểm tọa độ từ dữ liệu đầu vào lên bản đồ
-    points_layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=route_df,
-        get_position=["lon", "lat"],
-        get_fill_color=[0, 229, 255, 200], # Màu xanh neon đặc trưng của app
-        get_radius=50,
-        pickable=True,
-    )
-
-    # Đánh dấu 2 điểm chốt yếu: Điểm bắt đầu mất tín hiệu và Điểm dự đoán của AI
-    marker_data = [
-        {"lat": origin_lat, "lon": origin_lon, "color": [20, 20, 20, 255],   "radius": 100, "label": "Điểm mất dấu cuối cùng"},
-        {"lat": target_lat, "lon": target_lon, "color": [255, 50,  50, 255], "radius": 120, "label": "Tâm Datum dự báo (XGBoost)"},
-    ]
-    target_layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=marker_data,
-        get_position=["lon", "lat"],
-        get_fill_color="color",
-        get_radius="radius",
-        pickable=True,
-    )
-
-    def make_ring(center_lat, center_lon, r_lat, r_lon, n=64):
-        pts = []
-        for k in range(n + 1):
-            angle = 2 * math.pi * k / n
-            pts.append([
-                center_lon + r_lon * math.sin(angle),
-                center_lat + r_lat * math.cos(angle)
-            ])
-        return pts
-
-    ring_68  = make_ring(target_lat, target_lon, std_lat,       std_lon)
-    ring_95  = make_ring(target_lat, target_lon, std_lat * 1.96, std_lon * 1.96)
-
-    rings_data = [
-        {"path": ring_68,  "color": [255, 200, 0, 220], "name": "Vùng tin cậy 68%"},
-        {"path": ring_95,  "color": [255, 80,  0, 160], "name": "Vùng tin cậy 95%"},
-    ]
-    ring_layer = pdk.Layer(
-        "PathLayer",
-        data=rings_data,
-        get_path="path",
-        get_color="color",
-        width_min_pixels=2,
-    )
-
-    view_state = pdk.ViewState(
-        latitude=(origin_lat + target_lat) / 2,
-        longitude=(origin_lon + target_lon) / 2,
-        zoom=14,
-        pitch=55,
-        bearing=15,
-    )
-
-    deck = pdk.Deck(
-        layers=[hex_layer, path_layer, points_layer, target_layer, ring_layer],
-        initial_view_state=view_state,
-        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-        tooltip={"text": "{label}\n{name}"},
-    )
-    return deck
-
-
-# ─────────────────────────────────────────────
-# PHẦN 5: STREAMLIT UI
-# ─────────────────────────────────────────────
+# ============================================================
+# CẤU HÌNH CHUNG
+# ============================================================
 st.set_page_config(
-    page_title="AI Rescue System v2",
+    page_title="AI Pathfinding — Dự đoán vị trí thiết bị",
     layout="wide",
-    page_icon="🛰️",
     initial_sidebar_state="expanded",
 )
 
-# ── CSS: Thiết kế lại toàn bộ giao diện theo 1 hệ màu thống nhất (Light / Ops-room) ──
-st.markdown("""
+API_KEY = "23913db94b60da48fe4dd64dbab2344f"
+
+ASSET_PROFILES = {
+    "Người đi bộ, mất tích trên cạn": {"speed_range": (2.0, 6.0), "leeway": 0.020},
+    "Người rơi xuống nước, không có phao": {"speed_range": (0.0, 1.0), "leeway": 0.030},
+    "Người mặc áo phao hoặc bám vật nổi": {"speed_range": (0.0, 1.5), "leeway": 0.045},
+    "Xuồng nhỏ, không động cơ": {"speed_range": (1.0, 4.0), "leeway": 0.060},
+    "Phương tiện có động cơ, mất liên lạc": {"speed_range": (5.0, 40.0), "leeway": 0.015},
+}
+
+# ============================================================
+# GIAO DIỆN — THEME SÁNG, TƯƠNG PHẢN RÕ
+# ============================================================
+STYLE = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root{
-    --ink:        #0f172a;
-    --ink-soft:   #475569;
-    --line:       #e2e8f0;
+    --ink:        #111827;
+    --ink-soft:   #4b5563;
+    --line:       #e2e5eb;
     --surface:    #ffffff;
-    --bg:         #f4f6fb;
-    --accent:     #0f6fff;
-    --accent-soft:#eaf2ff;
-    --danger:     #e0483e;
+    --bg:         #f6f7fb;
+    --accent:     #1d4ed8;
+    --accent-soft:#eef2ff;
+    --danger:     #b91c1c;
     --danger-soft:#fdecea;
-    --success:    #17a673;
-    --success-soft:#e8f8f2;
+    --success:    #166534;
+    --success-soft:#eaf6ee;
 }
 
 html, body, [class*="css"] {
@@ -293,321 +53,557 @@ html, body, [class*="css"] {
     color: var(--ink);
 }
 
-/* Ẩn khoảng trắng thừa trên cùng của khối main */
-.block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 1200px; }
+.block-container { padding-top: 2.4rem; padding-bottom: 3rem; max-width: 1180px; }
 
-/* ── Sidebar ── */
 section[data-testid="stSidebar"] {
-    background-color: var(--ink);
+    background-color: var(--surface);
     border-right: 1px solid var(--line);
 }
-section[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
-section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #ffffff !important; font-weight: 700; }
-section[data-testid="stSidebar"] hr { border-color: #ffffff22; }
-[data-testid="stSidebar"] div[data-testid="stFileUploaderDropzone"] {
-    background-color: #1e293b !important;
-    border: 1px dashed #475569 !important;
+section[data-testid="stSidebar"] * { color: var(--ink) !important; }
+section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { font-weight: 700; }
+section[data-testid="stSidebar"] hr { border-color: var(--line); }
+
+[data-testid="stFileUploaderDropzone"] {
+    background-color: var(--bg) !important;
+    border: 1px dashed #b7bec9 !important;
     border-radius: 10px !important;
 }
-[data-testid="stSidebar"] div[data-baseweb="select"] > div {
-    background-color: #1e293b !important;
-    border: 1px solid #334155 !important;
-    color: #ffffff !important;
+div[data-baseweb="select"] > div {
+    background-color: var(--surface) !important;
+    border: 1px solid var(--line) !important;
+    color: var(--ink) !important;
 }
 
-/* ── Tiêu đề ── */
 h1, h2, h3 { font-family: 'Inter', sans-serif !important; color: var(--ink); letter-spacing: -0.2px; }
 
 .hero {
-    background: linear-gradient(135deg, var(--ink) 0%, #1e3a5f 100%);
-    border-radius: 16px;
-    padding: 28px 32px;
-    margin-bottom: 22px;
-    box-shadow: 0 8px 24px rgba(15,23,42,0.18);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 34px 36px;
+    margin-bottom: 24px;
+}
+.hero .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
 }
 .hero h1 {
-    color: #ffffff !important;
-    font-size: 1.65rem;
+    font-size: 1.9rem;
     font-weight: 800;
-    margin: 0 0 6px 0;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 0 0 10px 0;
 }
 .hero p {
-    color: #cbd5e1;
-    font-size: 0.92rem;
+    color: var(--ink-soft);
+    font-size: 0.98rem;
     margin: 0;
-}
-.model-badge {
-    display: inline-block; background: #ffffff18;
-    border: 1px solid #5aa9ff; border-radius: 20px;
-    padding: 3px 14px; font-size: 0.72rem; color: #7cc4ff !important;
-    font-family: 'Share Tech Mono', monospace; font-weight: 400;
-    letter-spacing: 0.5px;
+    max-width: 640px;
+    line-height: 1.6;
 }
 
-/* ── Card chung ── */
 .card {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 20px 22px;
+    border-radius: 12px;
+    padding: 22px 24px;
     margin-bottom: 18px;
-    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
 }
-.card h3 { margin-top: 0; font-size: 1.05rem; font-weight: 700; }
+.card h3 { margin-top: 0; font-size: 1.02rem; font-weight: 700; }
+
 .section-title {
-    font-size: 1.15rem; font-weight: 700; color: var(--ink);
-    margin: 6px 0 14px 0; display:flex; align-items:center; gap:8px;
+    font-size: 1.05rem; font-weight: 700; color: var(--ink);
+    margin: 30px 0 14px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
 }
 
-/* ── Metric ── */
-.stMetric { 
-    background: var(--surface) !important; 
-    border: 1px solid var(--line) !important; 
-    border-radius: 12px !important;
-    padding: 14px 16px !important; 
-    border-left: 4px solid var(--accent) !important; 
-    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+.stMetric {
+    background: var(--surface) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 10px !important;
+    padding: 14px 16px !important;
+    border-left: 3px solid var(--accent) !important;
 }
-.stMetric label { color: var(--ink-soft) !important; font-size: 0.78rem !important; font-weight: 500; }
-.stMetric [data-testid="stMetricValue"] { color: var(--ink) !important; font-weight: 800; font-size: 1.5rem !important; }
+.stMetric label { color: var(--ink-soft) !important; font-size: 0.76rem !important; font-weight: 500; }
+.stMetric [data-testid="stMetricValue"] { color: var(--ink) !important; font-weight: 800; font-size: 1.4rem !important; }
 
-/* ── Input trong nội dung chính ── */
-div[data-testid="stNumberInput"] div,
-div[data-testid="stTextInput"] div,
-.stSlider div,
-div[data-testid="stFileUploaderDropzone"] {
-    background-color: var(--surface) !important;
-    color: var(--ink) !important;
-    border-radius: 8px !important;
-}
-div[data-testid="stNumberInput"] input, 
+div[data-testid="stNumberInput"] input,
 div[data-testid="stTextInput"] input {
     color: var(--ink) !important;
-    font-weight: 500;
+    background-color: var(--surface) !important;
 }
 
-/* ── Nút bấm chính ── */
 div.stButton > button {
-    background: linear-gradient(135deg, var(--danger), #ff6a5f);
-    color: white; border: none; border-radius: 8px;
-    font-family: 'Inter', sans-serif; font-weight: 600;
-    font-size: 0.95rem; padding: 12px 28px;
-    box-shadow: 0 4px 14px rgba(224,72,62,0.35);
-    transition: all 0.2s ease;
+    background: var(--ink);
+    color: #ffffff; border: none; border-radius: 8px;
+    font-weight: 600; font-size: 0.92rem; padding: 11px 26px;
+    width: 100%;
+    transition: background 0.15s ease;
+}
+div.stButton > button:hover { background: #000000; }
+
+div[data-testid="stDownloadButton"] > button {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-weight: 600;
     width: 100%;
 }
-div.stButton > button:hover { box-shadow: 0 6px 20px rgba(224,72,62,0.5); transform: translateY(-1px); }
 
-/* ── Hộp cảnh báo / kết quả ── */
-.warning-box {
-    background: var(--surface) !important; 
-    border: 1px solid var(--line) !important;
-    border-left: 5px solid var(--danger) !important; 
-    border-radius: 12px !important;
-    padding: 22px 24px; 
-    margin: 0 0 16px 0; 
-    box-shadow: 0 2px 10px rgba(15,23,42,0.05);
-    color: var(--ink) !important;
+.result-box {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 22px 24px;
+    margin-bottom: 16px;
 }
-.warning-box h3 { color: var(--danger) !important; }
-.warning-box p, .warning-box b, .warning-box code { color: var(--ink) !important; }
-
-.success-box {
-    background: var(--surface) !important; 
-    border: 1px solid var(--line) !important;
-    border-left: 5px solid var(--success) !important; 
-    border-radius: 12px !important;
-    padding: 22px 24px; 
-    margin: 0 0 16px 0;
-    box-shadow: 0 2px 10px rgba(15,23,42,0.05);
-    color: var(--ink) !important;
+.result-box.danger { border-left-color: var(--danger); }
+.result-box.success { border-left-color: var(--success); }
+.result-box h3 { font-size: 0.98rem; font-weight: 700; margin-top: 0; }
+.result-box p { color: var(--ink-soft); margin: 6px 0; line-height: 1.6; font-size: 0.92rem; }
+.result-box code {
+    background: var(--bg); padding: 3px 8px; border-radius: 6px;
+    color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 0.95rem;
 }
-.success-box h3 { color: var(--success) !important; }
-.success-box p, .success-box b { color: var(--ink-soft) !important; }
 
-/* ── Chú thích bản đồ ── */
-.map-legend {
+.legend {
     font-size: 0.8rem; color: var(--ink-soft);
     background: var(--surface); border: 1px solid var(--line);
-    border-radius: 10px; padding: 10px 16px; margin-top: 10px;
+    border-radius: 8px; padding: 12px 16px; margin-top: 10px; line-height: 1.7;
 }
 
-/* ── Trạng thái rỗng (chưa upload file) ── */
 .empty-state {
-    text-align: center; padding: 48px 24px;
+    text-align: center; padding: 56px 24px;
     background: var(--surface); border: 1px dashed var(--line);
-    border-radius: 16px;
+    border-radius: 12px;
 }
-.empty-state h2 { color: var(--ink); font-weight: 700; margin-bottom: 8px; }
-.empty-state p { color: var(--ink-soft); max-width: 520px; margin: 0 auto; line-height: 1.6; }
+.empty-state h2 { color: var(--ink); font-weight: 700; margin-bottom: 8px; font-size: 1.3rem; }
+.empty-state p { color: var(--ink-soft); max-width: 480px; margin: 0 auto; line-height: 1.6; font-size: 0.92rem; }
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(STYLE, unsafe_allow_html=True)
 
-# ── Header ──
+
+# ============================================================
+# DỮ LIỆU THỜI TIẾT
+# ============================================================
+def get_current_weather(lat, lon):
+    try:
+        url = (f"https://api.openweathermap.org/data/2.5/weather"
+               f"?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=vi")
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            d = resp.json()
+            return {
+                "wind_speed":  d["wind"].get("speed", 0),
+                "wind_deg":    d["wind"].get("deg", 0),
+                "temp":        d["main"].get("temp", 25),
+                "humidity":    d["main"].get("humidity", 70),
+                "rain":        d.get("rain", {}).get("1h", 0),
+                "description": d["weather"][0].get("description", "Không rõ"),
+                "visibility":  d.get("visibility", 10000) / 1000,
+            }
+    except Exception:
+        pass
+    return None
+
+
+# ============================================================
+# ĐỌC FILE TRIP REPORT
+# ============================================================
+def parse_excel_data(df):
+    lat_col, lon_col, vel_col = None, None, None
+    for col in df.columns:
+        c = str(col).lower()
+        if any(k in c for k in ["vĩ độ", "latitude", "lat"]):
+            lat_col = col
+        elif any(k in c for k in ["kinh độ", "longitude", "lon"]):
+            lon_col = col
+        elif any(k in c for k in ["vận tốc", "velocity", "speed", "mileage"]):
+            vel_col = col
+
+    if lat_col is None or lon_col is None:
+        lat_col = df.columns[2] if len(df.columns) > 2 else df.columns[0]
+        lon_col = df.columns[3] if len(df.columns) > 3 else df.columns[1]
+    if vel_col is None:
+        vel_col = df.columns[-1]
+
+    rows = []
+    for idx, row in df.iterrows():
+        try:
+            lat_val = float(str(row[lat_col]).replace(",", "").strip())
+            lon_val = float(str(row[lon_col]).replace(",", "").strip())
+            vel_match = pd.Series(str(row[vel_col])).str.extract(r"([-+]?\d+\.?\d*)")[0][0]
+            vel_val = float(vel_match) if vel_match is not None else 0.0
+            rows.append({"lat": lat_val, "lon": lon_val, "velocity": vel_val, "step": idx})
+        except (ValueError, TypeError):
+            continue
+    return pd.DataFrame(rows)
+
+
+def initial_bearing(lat1, lon1, lat2, lon2):
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dlon = math.radians(lon2 - lon1)
+    x = math.sin(dlon) * math.cos(phi2)
+    y = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(dlon)
+    return math.degrees(math.atan2(x, y)) % 360
+
+
+# ============================================================
+# MÔ PHỎNG MONTE CARLO — HÀNH VI TRÔI DẠT
+# ============================================================
+def run_monte_carlo(origin_lat, origin_lon, last_heading_deg, wind_speed, wind_deg,
+                     time_lost_min, asset_profile, n_particles=4000, seed=42):
+    rng = np.random.default_rng(seed)
+    speed_lo, speed_hi = asset_profile["speed_range"]
+    leeway = asset_profile["leeway"]
+
+    if last_heading_deg is None:
+        headings = rng.uniform(0, 360, n_particles)
+    else:
+        kappa = max(0.4, 5.0 - time_lost_min / 25)
+        headings = np.degrees(rng.vonmises(math.radians(last_heading_deg), kappa, n_particles)) % 360
+
+    own_speed = rng.uniform(speed_lo, speed_hi, n_particles)
+    wind_drift_kmh = wind_speed * 3.6 * leeway
+    t_hours = (time_lost_min / 60) * rng.uniform(0.85, 1.15, n_particles)
+
+    own_dx = own_speed * np.sin(np.radians(headings)) * t_hours
+    own_dy = own_speed * np.cos(np.radians(headings)) * t_hours
+    wind_dx = wind_drift_kmh * np.sin(np.radians(wind_deg)) * t_hours
+    wind_dy = wind_drift_kmh * np.cos(np.radians(wind_deg)) * t_hours
+
+    dx_km = own_dx + wind_dx
+    dy_km = own_dy + wind_dy
+
+    d_lat = dy_km * 1000 / 111111
+    d_lon = dx_km * 1000 / (111111 * math.cos(math.radians(origin_lat)))
+
+    lats = origin_lat + d_lat
+    lons = origin_lon + d_lon
+    return lats, lons
+
+
+def compute_datum_and_rings(lats, lons, origin_lat):
+    datum_lat = float(np.mean(lats))
+    datum_lon = float(np.mean(lons))
+    dy = (lats - datum_lat) * 111111
+    dx = (lons - datum_lon) * 111111 * math.cos(math.radians(origin_lat))
+    dist = np.sqrt(dx**2 + dy**2)
+    r50 = float(np.percentile(dist, 50))
+    r90 = float(np.percentile(dist, 90))
+    r95 = float(np.percentile(dist, 95))
+    return datum_lat, datum_lon, r50, r90, r95
+
+
+def recommend_search_effort(radius_m, visibility_km):
+    area_km2 = math.pi * (radius_m / 1000) ** 2
+    sweep_width_km = max(0.05, min(visibility_km * 0.3, 1.5))
+    track_length_km = area_km2 / sweep_width_km
+    search_hours = track_length_km / 20  # tốc độ quét hiệu dụng giả định 20 km/h
+
+    if area_km2 < 0.5:
+        pattern = "Tìm kiếm hình vuông mở rộng (Expanding Square)"
+    elif area_km2 < 5:
+        pattern = "Tìm kiếm hình quạt (Sector Search)"
+    else:
+        pattern = "Tìm kiếm đường song song (Parallel Track)"
+
+    return area_km2, sweep_width_km, track_length_km, search_hours, pattern
+
+
+def make_ring(center_lat, center_lon, radius_m, n=72):
+    pts = []
+    r_lat = radius_m / 111111
+    r_lon = radius_m / (111111 * math.cos(math.radians(center_lat)))
+    for k in range(n + 1):
+        a = 2 * math.pi * k / n
+        pts.append([center_lon + r_lon * math.sin(a), center_lat + r_lat * math.cos(a)])
+    return pts
+
+
+# ============================================================
+# BẢN ĐỒ
+# ============================================================
+def build_map(route_df, particle_df, origin_lat, origin_lon, datum_lat, datum_lon, r50, r90, r95):
+    layers = []
+
+    if len(route_df) > 1:
+        path_data = [{"path": [[r.lon, r.lat] for _, r in route_df.iterrows()]}]
+        layers.append(pdk.Layer(
+            "PathLayer", data=path_data, get_path="path",
+            get_color=[29, 78, 216, 200], width_min_pixels=2,
+        ))
+
+    layers.append(pdk.Layer(
+        "ScatterplotLayer", data=route_df, get_position=["lon", "lat"],
+        get_fill_color=[71, 85, 105, 160], get_radius=25, pickable=True,
+    ))
+
+    layers.append(pdk.Layer(
+        "HeatmapLayer", data=particle_df, get_position=["lon", "lat"],
+        opacity=0.45, radius_pixels=40,
+    ))
+
+    rings_data = [
+        {"path": make_ring(datum_lat, datum_lon, r50), "color": [29, 78, 216, 200]},
+        {"path": make_ring(datum_lat, datum_lon, r90), "color": [180, 130, 20, 190]},
+        {"path": make_ring(datum_lat, datum_lon, r95), "color": [185, 28, 28, 160]},
+    ]
+    layers.append(pdk.Layer(
+        "PathLayer", data=rings_data, get_path="path", get_color="color", width_min_pixels=2,
+    ))
+
+    marker_data = [
+        {"lat": origin_lat, "lon": origin_lon, "color": [17, 24, 39, 255], "radius": 90, "label": "Điểm mất tín hiệu"},
+        {"lat": datum_lat, "lon": datum_lon, "color": [185, 28, 28, 255], "radius": 110, "label": "Tâm datum dự báo"},
+    ]
+    layers.append(pdk.Layer(
+        "ScatterplotLayer", data=marker_data, get_position=["lon", "lat"],
+        get_fill_color="color", get_radius="radius", pickable=True,
+    ))
+
+    view_state = pdk.ViewState(
+        latitude=(origin_lat + datum_lat) / 2,
+        longitude=(origin_lon + datum_lon) / 2,
+        zoom=13, pitch=0, bearing=0,
+    )
+
+    return pdk.Deck(
+        layers=layers,
+        initial_view_state=view_state,
+        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+        tooltip={"text": "{label}"},
+    )
+
+
+# ============================================================
+# TRẠNG THÁI PHIÊN
+# ============================================================
+for key, default in [("page", "landing"), ("analysis_active", False)]:
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+
+def go_to_dashboard():
+    st.session_state.page = "dashboard"
+
+
+def go_to_landing():
+    st.session_state.page = "landing"
+    st.session_state.analysis_active = False
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+st.sidebar.markdown("### Dữ liệu đầu vào")
+uploaded_file = st.sidebar.file_uploader("Tải file Trip Report (.xlsx / .xls)", type=["xlsx", "xls"])
+
+route_df = pd.DataFrame()
+if uploaded_file is not None:
+    raw_df = pd.read_excel(uploaded_file)
+    route_df = parse_excel_data(raw_df)
+    if route_df.empty:
+        st.sidebar.error("Không tìm thấy cột tọa độ hợp lệ trong file.")
+    else:
+        order = st.sidebar.radio(
+            "Điểm mất tín hiệu cuối cùng nằm ở",
+            ["Dòng cuối file (thứ tự thời gian tăng dần)", "Dòng đầu file"],
+            index=0,
+        )
+        last_point = route_df.iloc[-1] if "cuối" in order else route_df.iloc[0]
+
+        st.sidebar.markdown("---")
+        asset_label = st.sidebar.selectbox("Đối tượng cần tìm kiếm", list(ASSET_PROFILES.keys()))
+
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### Điều kiện thực tế")
+        weather = get_current_weather(last_point["lat"], last_point["lon"])
+        if weather:
+            st.sidebar.write(f"Toạ độ: {last_point['lat']:.5f}, {last_point['lon']:.5f}")
+            c1, c2 = st.sidebar.columns(2)
+            c1.metric("Nhiệt độ", f"{weather['temp']}°C")
+            c2.metric("Mưa", f"{weather['rain']} mm/h")
+            st.sidebar.write(f"Gió: {weather['wind_speed']} m/s, hướng {weather['wind_deg']}°")
+            st.sidebar.write(f"Tầm nhìn: {weather['visibility']:.1f} km — {weather['description'].capitalize()}")
+        else:
+            st.sidebar.warning("Không lấy được dữ liệu thời tiết thực — dùng giá trị dự phòng.")
+            weather = {"wind_speed": 5.0, "wind_deg": 45.0, "temp": 25.0, "rain": 0, "visibility": 8.0, "description": "không rõ"}
+
+        time_lost = st.sidebar.slider("Thời gian mất tín hiệu (phút)", 5, 240, 30)
+
+        st.sidebar.markdown("---")
+        if st.session_state.page == "landing":
+            st.sidebar.button("Bắt đầu phân tích", on_click=go_to_dashboard)
+        else:
+            st.sidebar.button("Quay lại trang đầu", on_click=go_to_landing)
+
+
+# ============================================================
+# HEADER
+# ============================================================
 st.markdown("""
 <div class="hero">
-    <h1>AI PATHFINDING — DỰ ĐOÁN VỊ TRÍ THIẾT BỊ
-        <span class="model-badge">Algorithm v2 · 3D Pydeck</span>
-    </h1>
-    <p>Real-time Weather · Drift Prediction · Uncertainty Ellipse · 3D Terrain Heatmap</p>
+    <div class="eyebrow">Hệ thống hỗ trợ cứu hộ</div>
+    <h1>AI Pathfinding — Dự đoán vị trí thiết bị mất tín hiệu</h1>
+    <p>Mô phỏng Monte Carlo dựa trên gió, dòng trôi và hành vi di chuyển của đối tượng, kết hợp dữ liệu thời tiết thời gian thực để xác định vùng tìm kiếm ưu tiên và đề xuất phương án triển khai.</p>
 </div>
 """, unsafe_allow_html=True)
 
-for key in ['analysis_active', 'model_lat', 'model_lon', 'model_trained']:
-    if key not in st.session_state:
-        st.session_state[key] = False
 
-if not st.session_state.model_trained:
-    with st.spinner("Đang khởi tạo mô hình AI..."):
-        ml, mln = train_xgboost_model()
-        st.session_state.model_lat = ml
-        st.session_state.model_lon = mln
-        st.session_state.model_trained = True
-    if XGBOOST_AVAILABLE:
-        st.success("✅ Model AI đã sẵn sàng — 5.000 mẫu synthetic + Bootstrap Ensemble")
-    else:
-        st.warning("⚠️ XGBoost chưa cài (`pip install xgboost`) — đang dùng mô hình vật lý dự phòng.")
+# ============================================================
+# TRANG LANDING
+# ============================================================
+if st.session_state.page == "landing" or uploaded_file is None:
+    st.markdown("""
+    <div class="empty-state">
+        <h2>Chưa có dữ liệu hành trình</h2>
+        <p>Tải lên file Trip Report (.xlsx hoặc .xls) ở thanh bên trái. Hệ thống sẽ đọc toàn bộ điểm tọa độ, lấy điều kiện thời tiết thực tế tại vị trí mất tín hiệu, và mô phỏng vùng trôi dạt có xác suất cao nhất.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ── Sidebar ──
-st.sidebar.markdown("## 📂 Dữ liệu đầu vào")
-uploaded_file = st.sidebar.file_uploader("Tải file dữ liệu Trip Report", type=["xlsx", "xls"])
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("""<div class="card"><h3>Dữ liệu hành trình</h3><p style="color:var(--ink-soft);font-size:0.88rem;">
+        Đọc toàn bộ log tọa độ, không chỉ điểm cuối, để suy ra hướng di chuyển gần nhất của đối tượng.</p></div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""<div class="card"><h3>Mô phỏng trôi dạt</h3><p style="color:var(--ink-soft);font-size:0.88rem;">
+        4.000 kịch bản Monte Carlo kết hợp gió thực tế, hệ số leeway theo loại đối tượng và độ bất định thời gian.</p></div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown("""<div class="card"><h3>Đề xuất chiến thuật</h3><p style="color:var(--ink-soft);font-size:0.88rem;">
+        Vùng tin cậy 50/90/95%, kiểu hình tìm kiếm phù hợp và ước tính số giờ quét cần thiết.</p></div>""", unsafe_allow_html=True)
 
-if uploaded_file is not None:
-    # Đọc tệp và bóc tách danh sách toàn bộ tọa độ
-    raw_df = pd.read_excel(uploaded_file)
-    route_df = parse_excel_data(raw_df)
+# ============================================================
+# TRANG DASHBOARD
+# ============================================================
+else:
+    lat, lon, velocity = last_point["lat"], last_point["lon"], last_point["velocity"]
+    wind_speed, wind_dir, temp_c = weather["wind_speed"], weather["wind_deg"], weather["temp"]
 
-    if not route_df.empty:
-        # Lấy điểm mất tín hiệu cuối cùng (Dòng cuối hoặc dòng đầu tùy cấu trúc log file)
-        latest_point = route_df.iloc[0] 
-        lat = latest_point["lat"]
-        lon = latest_point["lon"]
-        velocity = latest_point["velocity"]
-    else:
-        st.sidebar.error("❌ Không tìm thấy cột chứa dữ liệu tọa độ hợp lệ!")
-        st.stop()
+    heading = None
+    if len(route_df) >= 2:
+        p1, p2 = route_df.iloc[-2], route_df.iloc[-1]
+        heading = initial_bearing(p1["lat"], p1["lon"], p2["lat"], p2["lon"])
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🌦️ Môi trường thực tế")
-    weather = get_realtime_weather(lat, lon)
-
-    if weather:
-        st.sidebar.success(f"📍 `{lat:.5f}, {lon:.5f}`")
-        c1, c2 = st.sidebar.columns(2)
-        c1.metric("Nhiệt độ", f"{weather['temp']}°C")
-        c2.metric("Lượng mưa", f"{weather['rain']} mm/h")
-        st.sidebar.write(f"💨 Gió: **{weather['wind_speed']} m/s** — hướng **{weather['wind_deg']}°**")
-        st.sidebar.write(f"👁️ Tầm nhìn: **{weather['visibility']} km** | {weather['description'].capitalize()}")
-        wind_speed = weather['wind_speed']
-        wind_dir   = weather['wind_deg']
-        temp_c     = weather['temp']
-    else:
-        st.sidebar.warning("⚠️ Dùng dữ liệu dự phòng")
-        wind_speed, wind_dir, temp_c = 5.0, 45.0, 25.0
-
-    time_lost = st.sidebar.slider("⏱️ Thời gian mất tín hiệu (phút)", 5, 120, 30)
-
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Phát triển bởi đội ngũ NeoSAR")
-
-    # ── Tổng quan thông số ──
-    st.markdown('<div class="section-title">📊 Tổng quan thông số đầu vào</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Tổng quan thông số đầu vào</div>', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏃 Vận tốc TB",     f"{velocity} km/h")
-    col2.metric("💨 Sức gió",        f"{wind_speed} m/s")
-    col3.metric("🌡️ Nhiệt độ",      f"{temp_c}°C")
-    col4.metric("⏱️ Mất tín hiệu",   f"{time_lost} mins")
+    col1.metric("Vận tốc gần nhất", f"{velocity:.1f} km/h")
+    col2.metric("Sức gió", f"{wind_speed} m/s")
+    col3.metric("Nhiệt độ", f"{temp_c}°C")
+    col4.metric("Thời gian mất tín hiệu", f"{time_lost} phút")
 
-    st.write("")
-    st.markdown('<div class="section-title">🧠 Phân tích AI &amp; Chiến thuật Cứu hộ</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Phân tích và chiến thuật cứu hộ</div>', unsafe_allow_html=True)
 
-    if st.button("🚀 Kích hoạt AI Phân tích rủi ro & Tọa độ"):
+    if st.button("Kích hoạt phân tích"):
         st.session_state.analysis_active = True
 
     if st.session_state.analysis_active:
-        with st.status("🛰️ Đang quét dữ liệu đa tầng...", expanded=True) as status:
-            st.write("🔧 Nạp mô hình thuật toán...")
+        with st.status("Đang chạy mô phỏng...", expanded=False) as status:
+            st.write("Nạp thông số đầu vào và dữ liệu thời tiết.")
+            time.sleep(0.3)
+            st.write("Chạy 4.000 kịch bản Monte Carlo.")
             time.sleep(0.4)
-            st.write("🌦️ Đọc chỉ số thời tiết thực tế...")
-            time.sleep(0.3)
-            st.write("🔄 Chạy Bootstrap Ensemble...")
-            time.sleep(0.5)
-            st.write("📐 Tính toán vùng xác suất...")
-            time.sleep(0.3)
-            status.update(label="✅ Phân tích hoàn tất!", state="complete")
+            st.write("Tính vùng tin cậy và đề xuất chiến thuật.")
+            time.sleep(0.2)
+            status.update(label="Hoàn tất", state="complete")
 
-        features = [velocity, wind_speed, wind_dir, time_lost, temp_c]
-        d_lat, d_lon, std_lat, std_lon = predict_with_uncertainty(
-            st.session_state.model_lat, st.session_state.model_lon, features, n_bootstrap=100
-        )
+        asset_profile = ASSET_PROFILES[asset_label]
+        lats, lons = run_monte_carlo(lat, lon, heading, wind_speed, wind_dir, time_lost, asset_profile)
+        datum_lat, datum_lon, r50, r90, r95 = compute_datum_and_rings(lats, lons, lat)
+        area_km2, sweep_km, track_km, search_hours, pattern = recommend_search_effort(r90, weather["visibility"])
 
-        new_lat = lat + d_lat
-        new_lon = lon + d_lon
+        water_temp = temp_c - 2
+        if water_temp > 20:
+            survival_time = "6 đến 12 giờ"
+        elif water_temp > 10:
+            survival_time = "2 đến 4 giờ"
+        else:
+            survival_time = "dưới 1 giờ"
+        is_cold = temp_c < 20
+        is_rain = weather["rain"] > 5
 
-        radius_68_m  = int(std_lat * 111111)
-        radius_95_m  = int(std_lat * 1.96 * 111111)
-
-        water_temp    = temp_c - 2
-        survival_time = "6–12 giờ" if water_temp > 20 else ("2–4 giờ" if water_temp > 10 else "< 1 giờ")
-        is_cold       = temp_c < 20
-        is_rain       = (weather['rain'] > 5) if weather else False
-
-        res_col1, res_col2 = st.columns(2, gap="medium")
-        with res_col1:
+        rc1, rc2 = st.columns(2, gap="medium")
+        with rc1:
             st.markdown(f"""
-<div class="warning-box">
-<h3>🎯 TỌA ĐỘ MỤC TIÊU ƯU TIÊN <span style="font-size:0.75rem;color:#94a3b8;font-weight:400;">(AI Engine + Bootstrap)</span></h3>
-<p>📌 <b>Tọa độ có xác suất cao nhất:</b><br><code style="background:#f4f4f7; padding:2px 6px; border-radius:4px; color:var(--danger) !important;">{new_lat:.6f}, {new_lon:.6f}</code></p>
-<p>📐 <b>Vùng dự báo 68%:</b> bán kính ~<b>{radius_68_m} m</b> &nbsp;|&nbsp; <b>95%:</b> ~<b>{radius_95_m} m</b></p>
-<p>🧭 <b>Vùng di chuyển:</b> <b>{d_lat*111111:.0f} m</b> Nam-Bắc &nbsp;/&nbsp; <b>{d_lon*111111*math.cos(math.radians(lat)):.0f} m</b> Đông-Tây</p>
-</div>
-""", unsafe_allow_html=True)
-        with res_col2:
+            <div class="result-box danger">
+            <h3>Tọa độ trung tâm vùng tìm kiếm</h3>
+            <p>Datum dự báo: <code>{datum_lat:.6f}, {datum_lon:.6f}</code></p>
+            <p>Vùng tin cậy: 50% trong bán kính {r50:.0f} m — 90% trong {r90:.0f} m — 95% trong {r95:.0f} m</p>
+            <p>Hướng di chuyển ưu tiên: {"chưa xác định, dùng phân bố đều" if heading is None else f"khoảng {heading:.0f}° so với hướng Bắc, dựa trên hành trình đã ghi nhận"}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with rc2:
             st.markdown(f"""
-<div class="success-box">
-<h3>🩺 PHÂN TÍCH CHUYÊN MÔN</h3>
-<p>⏳ <b>Thời gian vàng:</b> <b style="color:var(--ink) !important;">{survival_time}</b> (nhiệt độ dự báo ~{water_temp:.1f}°C)</p>
-<p>🥶 <b>Rủi ro hạ thân nhiệt:</b> <b style="color:var(--danger) !important;">{"CAO — cần ưu tiên sưởi ấm ngay" if is_cold else "Thấp — nằm trong ngưỡng an toàn"}</b></p>
-<p>🌧️ <b>Lượng mưa:</b> <b style="color:var(--ink) !important;">{"Mưa lớn — giảm tầm nhìn, triển khai radar" if is_rain else "Thấp, tầm nhìn ổn định — triển khai phương án tiếp cận trực tiếp"}</b></p>
-<p>🧭 <b>Chiến thuật đề xuất:</b> Triển khai tìm kiếm theo hình xoắn ốc mở rộng từ tâm tọa độ ưu tiên, ưu tiên vùng 68%.</p>
-</div>
-""", unsafe_allow_html=True)
+            <div class="result-box success">
+            <h3>Đánh giá tình huống</h3>
+            <p>Thời gian vàng ước tính: {survival_time} (nhiệt độ môi trường ~{water_temp:.1f}°C)</p>
+            <p>Rủi ro hạ thân nhiệt: {"Cao, cần ưu tiên sưởi ấm ngay khi tiếp cận" if is_cold else "Thấp, trong ngưỡng an toàn"}</p>
+            <p>Điều kiện quan sát: {"Mưa lớn, tầm nhìn giảm, cân nhắc bổ sung thiết bị hỗ trợ" if is_rain else "Ổn định, phù hợp tiếp cận trực tiếp"}</p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.code(f"LAT: {new_lat:.6f}   LON: {new_lon:.6f}   [±{radius_68_m}m @ 68% | ±{radius_95_m}m @ 95%]", language="text")
+        st.markdown(f"""
+        <div class="result-box">
+        <h3>Đề xuất triển khai tìm kiếm</h3>
+        <p>Diện tích vùng tìm kiếm (bán kính 90%): {area_km2:.2f} km²</p>
+        <p>Kiểu hình tìm kiếm phù hợp: {pattern}</p>
+        <p>Khoảng cách quét đề xuất giữa các tuyến: {sweep_km:.2f} km, tổng chiều dài tuyến quét: {track_km:.1f} km</p>
+        <p>Thời gian quét ước tính (một tổ tìm kiếm, tốc độ hiệu dụng 20 km/h): {search_hours:.1f} giờ</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        if XGBOOST_AVAILABLE and st.session_state.model_lat is not None:
-            with st.expander("📊 Feature Importance — AI (Lat model)"):
-                fi = st.session_state.model_lat.feature_importances_
-                fi_df = pd.DataFrame({
-                    "Feature":    ["Vận tốc (km/h)", "Sức gió (m/s)", "Hướng gió (°)", "Thời gian (phút)", "Nhiệt độ (°C)"],
-                    "Importance": fi
-                }).sort_values("Importance", ascending=False)
-                st.bar_chart(fi_df.set_index("Feature")["Importance"])
+        st.markdown('<div class="section-title">Độ nhạy: bán kính vùng tìm kiếm theo thời gian mất tín hiệu</div>', unsafe_allow_html=True)
+        sens_rows = []
+        for factor in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]:
+            t = max(5, time_lost * factor)
+            l2, o2 = run_monte_carlo(lat, lon, heading, wind_speed, wind_dir, t, asset_profile, n_particles=800, seed=7)
+            _, _, _, r90_t, _ = compute_datum_and_rings(l2, o2, lat)
+            sens_rows.append({"Thời gian (phút)": round(t), "Bán kính 90% (m)": round(r90_t)})
+        sens_df = pd.DataFrame(sens_rows).drop_duplicates(subset="Thời gian (phút)").set_index("Thời gian (phút)")
+        st.line_chart(sens_df)
 
-        st.write("")
-        st.markdown('<div class="section-title">🗺️ Bản đồ vệ tinh 3D — Toàn bộ hành trình &amp; Vùng xác suất</div>', unsafe_allow_html=True)
-
-        deck = build_pydeck_map(route_df, lat, lon, new_lat, new_lon, std_lat, std_lon)
+        st.markdown('<div class="section-title">Bản đồ vùng tìm kiếm</div>', unsafe_allow_html=True)
+        n_show = min(2000, len(lats))
+        particle_df = pd.DataFrame({"lat": lats[:n_show], "lon": lons[:n_show]})
+        deck = build_map(route_df, particle_df, lat, lon, datum_lat, datum_lon, r50, r90, r95)
         st.pydeck_chart(deck)
 
         st.markdown("""
-<div class="map-legend">
-🟡 Đường vàng: Lộ trình &nbsp;|&nbsp; 🔵 Chấm xanh neon: Toàn bộ điểm tọa độ log &nbsp;|&nbsp; ⚫ Điểm đen: Vị trí mất dấu cuối cùng &nbsp;|&nbsp; 🔴 Điểm đỏ: Tâm Datum dự tính<br>
-🟡 Vòng vàng: 68% &nbsp;|&nbsp; 🟠 Vòng cam: 95% &nbsp;|&nbsp; Cột màu: Khối cao độ 3D tích lũy hành trình
-</div>
-""", unsafe_allow_html=True)
+        <div class="legend">
+        Đường xanh: hành trình đã ghi nhận — Vùng nhiệt: mật độ khả năng vị trí theo mô phỏng —
+        Điểm đen: vị trí mất tín hiệu cuối cùng — Điểm đỏ: tâm datum dự báo —
+        Vòng xanh 50% — Vòng vàng 90% — Vòng đỏ 95%
+        </div>
+        """, unsafe_allow_html=True)
 
-else:
-    st.markdown("""
-<div class="empty-state">
-    <h2>🛰️ Chưa có dữ liệu hành trình</h2>
-    <p>Tải lên file Trip Report (.xlsx / .xls) ở thanh bên trái để bắt đầu phân tích AI và dự đoán vị trí thiết bị.</p>
-</div>
-""", unsafe_allow_html=True)
+        report = f"""BÁO CÁO PHÂN TÍCH VỊ TRÍ TÌM KIẾM — AI PATHFINDING
 
-    st.write("")
-    try:
-        st.image("cuuho.png", caption="Hệ thống trực chỉ huy và phân tích rủi ro", use_container_width=True)
-    except Exception:
-        st.info("💡 Mẹo: Bỏ file ảnh tên 'cuuho.png' vào thư mục dự án để hiển thị poster chỉ huy.")
+Vị trí mất tín hiệu cuối cùng: {lat:.6f}, {lon:.6f}
+Đối tượng tìm kiếm: {asset_label}
+Thời gian mất tín hiệu: {time_lost} phút
+Điều kiện thời tiết: gió {wind_speed} m/s hướng {wind_dir}°, nhiệt độ {temp_c}°C, {weather['description']}
+
+KẾT QUẢ MÔ PHỎNG (Monte Carlo, 4000 kịch bản)
+Tâm datum dự báo: {datum_lat:.6f}, {datum_lon:.6f}
+Bán kính vùng tin cậy 50%: {r50:.0f} m
+Bán kính vùng tin cậy 90%: {r90:.0f} m
+Bán kính vùng tin cậy 95%: {r95:.0f} m
+
+ĐỀ XUẤT TRIỂN KHAI
+Diện tích vùng tìm kiếm (90%): {area_km2:.2f} km2
+Kiểu hình tìm kiếm: {pattern}
+Khoảng cách quét đề xuất: {sweep_km:.2f} km
+Thời gian quét ước tính: {search_hours:.1f} giờ (1 tổ, tốc độ hiệu dụng 20 km/h)
+
+ĐÁNH GIÁ TÌNH HUỐNG
+Thời gian vàng ước tính: {survival_time}
+Rủi ro hạ thân nhiệt: {"Cao" if is_cold else "Thấp"}
+Điều kiện quan sát: {"Mưa lớn, tầm nhìn giảm" if is_rain else "Ổn định"}
+"""
+        st.download_button("Tải báo cáo tóm tắt (.txt)", report, file_name="bao_cao_tim_kiem.txt")
