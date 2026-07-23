@@ -445,7 +445,7 @@ if uploaded_file is not None:
         with st.status("🛰️ Đang quét dữ liệu đa tầng...", expanded=True) as status:
             st.write(" Nạp mô hình thuật toán ...")
             time.sleep(0.4)
-            st.write( Đọc chỉ số thời tiết thực tế...")
+            st.write( "Đọc chỉ số thời tiết thực tế...")
             time.sleep(0.3)
             st.write("Chạy Bootstrap Ensemble...")
             time.sleep(0.5)
