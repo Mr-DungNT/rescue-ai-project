@@ -254,11 +254,17 @@ def initial_bearing(lat1, lon1, lat2, lon2):
     return math.degrees(math.atan2(x, y)) % 360
 
 
-# ============================================================
-# MÔ PHỎNG MONTE CARLO — HÀNH VI TRÔI DẠT
-# ============================================================
+def estimate_observed_speed(route_df, window=5):
+    """Vận tốc thực tế gần thời điểm mất tín hiệu, lấy trung bình các điểm cuối cùng
+    thay vì chỉ dùng khoảng tốc độ lý thuyết của loại đối tượng."""
+    if route_df.empty:
+        return 0.0
+    tail = route_df.tail(window)
+    return float(tail["velocity"].mean())
+
+
 def run_monte_carlo(origin_lat, origin_lon, last_heading_deg, wind_speed, wind_deg,
-                     time_lost_min, asset_profile, n_particles=4000, seed=42):
+                     time_lost_min, asset_profile, observed_speed=0.0, n_particles=4000, seed=42):
     rng = np.random.default_rng(seed)
     speed_lo, speed_hi = asset_profile["speed_range"]
     leeway = asset_profile["leeway"]
@@ -269,7 +275,14 @@ def run_monte_carlo(origin_lat, origin_lon, last_heading_deg, wind_speed, wind_d
         kappa = max(0.4, 5.0 - time_lost_min / 25)
         headings = np.degrees(rng.vonmises(math.radians(last_heading_deg), kappa, n_particles)) % 360
 
-    own_speed = rng.uniform(speed_lo, speed_hi, n_particles)
+    # Neo tốc độ mô phỏng quanh tốc độ thực tế đo được ngay trước khi mất tín hiệu,
+    # thay vì lấy đều trong cả khoảng tốc độ lý thuyết của loại đối tượng — tránh việc
+    # vùng dự báo bị kéo đi quá xa so với dữ liệu quan sát thực tế.
+    base_speed = max(0.0, observed_speed)
+    spread = max(1.0, base_speed * 0.35)
+    own_speed = rng.normal(base_speed, spread, n_particles)
+    own_speed = np.clip(own_speed, 0.0, speed_hi)
+
     wind_drift_kmh = wind_speed * 3.6 * leeway
     t_hours = (time_lost_min / 60) * rng.uniform(0.85, 1.15, n_particles)
 
@@ -290,8 +303,11 @@ def run_monte_carlo(origin_lat, origin_lon, last_heading_deg, wind_speed, wind_d
 
 
 def compute_datum_and_rings(lats, lons, origin_lat):
-    datum_lat = float(np.mean(lats))
-    datum_lon = float(np.mean(lons))
+    # Dùng trung vị thay vì trung bình để tâm datum không bị kéo lệch bởi
+    # số ít kịch bản trôi dạt xa (đuôi phân phối), giữ vùng tìm kiếm bám sát
+    # phần lớn dữ liệu mô phỏng và vị trí thực tế.
+    datum_lat = float(np.median(lats))
+    datum_lon = float(np.median(lons))
     dy = (lats - datum_lat) * 111111
     dx = (lons - datum_lon) * 111111 * math.cos(math.radians(origin_lat))
     dist = np.sqrt(dx**2 + dy**2)
@@ -345,23 +361,30 @@ def build_map(route_df, particle_df, origin_lat, origin_lon, datum_lat, datum_lo
         get_fill_color=[71, 85, 105, 160], get_radius=25, pickable=True,
     ))
 
+    # Mật độ khả năng vị trí hiển thị dạng cột 3D — bán kính ô nhỏ để bám sát
+    # đúng khu vực có nhiều kịch bản mô phỏng rơi vào, thay vì trải rộng mờ nhòe.
     layers.append(pdk.Layer(
-        "HeatmapLayer", data=particle_df, get_position=["lon", "lat"],
-        opacity=0.45, radius_pixels=40,
+        "HexagonLayer", data=particle_df, get_position=["lon", "lat"],
+        radius=max(15, int(r50 / 6)), elevation_scale=6, elevation_range=[0, 400],
+        extruded=True, coverage=0.85, opacity=0.75,
+        color_range=[
+            [239, 246, 255], [191, 219, 254], [96, 165, 250],
+            [37, 99, 235], [30, 64, 175], [23, 37, 84],
+        ],
     ))
 
     rings_data = [
-        {"path": make_ring(datum_lat, datum_lon, r50), "color": [29, 78, 216, 200]},
-        {"path": make_ring(datum_lat, datum_lon, r90), "color": [180, 130, 20, 190]},
-        {"path": make_ring(datum_lat, datum_lon, r95), "color": [185, 28, 28, 160]},
+        {"path": make_ring(datum_lat, datum_lon, r50), "color": [29, 78, 216, 220]},
+        {"path": make_ring(datum_lat, datum_lon, r90), "color": [180, 130, 20, 200]},
+        {"path": make_ring(datum_lat, datum_lon, r95), "color": [185, 28, 28, 170]},
     ]
     layers.append(pdk.Layer(
         "PathLayer", data=rings_data, get_path="path", get_color="color", width_min_pixels=2,
     ))
 
     marker_data = [
-        {"lat": origin_lat, "lon": origin_lon, "color": [17, 24, 39, 255], "radius": 90, "label": "Điểm mất tín hiệu"},
-        {"lat": datum_lat, "lon": datum_lon, "color": [185, 28, 28, 255], "radius": 110, "label": "Tâm datum dự báo"},
+        {"lat": origin_lat, "lon": origin_lon, "color": [17, 24, 39, 255], "radius": 60, "label": "Điểm mất tín hiệu"},
+        {"lat": datum_lat, "lon": datum_lon, "color": [185, 28, 28, 255], "radius": 70, "label": "Tâm datum dự báo"},
     ]
     layers.append(pdk.Layer(
         "ScatterplotLayer", data=marker_data, get_position=["lon", "lat"],
@@ -371,7 +394,7 @@ def build_map(route_df, particle_df, origin_lat, origin_lon, datum_lat, datum_lo
     view_state = pdk.ViewState(
         latitude=(origin_lat + datum_lat) / 2,
         longitude=(origin_lon + datum_lon) / 2,
-        zoom=13, pitch=0, bearing=0,
+        zoom=15, pitch=55, bearing=15,
     )
 
     return pdk.Deck(
@@ -461,12 +484,37 @@ st.markdown("""
 # TRANG LANDING
 # ============================================================
 if st.session_state.page == "landing" or uploaded_file is None:
-    st.markdown("""
-    <div class="empty-state">
-        <h2>Chưa có dữ liệu hành trình</h2>
-        <p>Tải lên file Trip Report (.xlsx hoặc .xls) ở thanh bên trái. Hệ thống sẽ đọc toàn bộ điểm tọa độ, lấy điều kiện thời tiết thực tế tại vị trí mất tín hiệu, và mô phỏng vùng trôi dạt có xác suất cao nhất.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    lc1, lc2 = st.columns([1.1, 1], gap="large")
+    with lc1:
+        st.markdown("""
+        <div class="empty-state" style="text-align:left; padding: 40px 32px;">
+            <h2>Chưa có dữ liệu hành trình</h2>
+            <p style="margin:0;">Tải lên file Trip Report (.xlsx hoặc .xls) ở thanh bên trái. Hệ thống sẽ đọc toàn bộ điểm tọa độ, lấy điều kiện thời tiết thực tế tại vị trí mất tín hiệu, và mô phỏng vùng trôi dạt có xác suất cao nhất, bám sát dữ liệu quan sát thực tế thay vì giả định lý thuyết.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with lc2:
+        st.markdown("""
+        <svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; border:1px solid var(--line); border-radius:12px; background:var(--surface);">
+            <defs>
+                <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                    <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#e2e5eb" stroke-width="1"/>
+                </pattern>
+            </defs>
+            <rect width="420" height="300" fill="url(#grid)"/>
+            <circle cx="230" cy="150" r="110" fill="none" stroke="#b91c1c" stroke-width="1.4" opacity="0.55"/>
+            <circle cx="230" cy="150" r="75" fill="none" stroke="#b45309" stroke-width="1.4" opacity="0.65"/>
+            <circle cx="230" cy="150" r="42" fill="none" stroke="#1d4ed8" stroke-width="1.6"/>
+            <polyline points="80,60 120,95 150,110 175,128" fill="none" stroke="#111827" stroke-width="2" stroke-dasharray="5,5"/>
+            <circle cx="80" cy="60" r="4" fill="#4b5563"/>
+            <circle cx="120" cy="95" r="4" fill="#4b5563"/>
+            <circle cx="150" cy="110" r="4" fill="#4b5563"/>
+            <circle cx="175" cy="128" r="5" fill="#111827"/>
+            <circle cx="230" cy="150" r="6" fill="#b91c1c"/>
+            <text x="175" y="145" font-family="Inter, sans-serif" font-size="10" fill="#4b5563">Mất tín hiệu</text>
+            <text x="240" y="150" font-family="Inter, sans-serif" font-size="10" fill="#b91c1c">Datum</text>
+            <text x="24" y="24" font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="1" fill="#4b5563">VÙNG TÌM KIẾM ƯU TIÊN</text>
+        </svg>
+        """, unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -514,7 +562,9 @@ else:
             status.update(label="Hoàn tất", state="complete")
 
         asset_profile = ASSET_PROFILES[asset_label]
-        lats, lons = run_monte_carlo(lat, lon, heading, wind_speed, wind_dir, time_lost, asset_profile)
+        observed_speed = estimate_observed_speed(route_df)
+        lats, lons = run_monte_carlo(lat, lon, heading, wind_speed, wind_dir, time_lost,
+                                      asset_profile, observed_speed=observed_speed)
         datum_lat, datum_lon, r50, r90, r95 = compute_datum_and_rings(lats, lons, lat)
         area_km2, sweep_km, track_km, search_hours, pattern = recommend_search_effort(r90, weather["visibility"])
 
@@ -536,6 +586,7 @@ else:
             <p>Datum dự báo: <code>{datum_lat:.6f}, {datum_lon:.6f}</code></p>
             <p>Vùng tin cậy: 50% trong bán kính {r50:.0f} m — 90% trong {r90:.0f} m — 95% trong {r95:.0f} m</p>
             <p>Hướng di chuyển ưu tiên: {"chưa xác định, dùng phân bố đều" if heading is None else f"khoảng {heading:.0f}° so với hướng Bắc, dựa trên hành trình đã ghi nhận"}</p>
+            <p>Tốc độ neo mô phỏng: {observed_speed:.1f} km/h, lấy trung bình các điểm gần nhất trong dữ liệu thực tế</p>
             </div>
             """, unsafe_allow_html=True)
         with rc2:
@@ -562,7 +613,8 @@ else:
         sens_rows = []
         for factor in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]:
             t = max(5, time_lost * factor)
-            l2, o2 = run_monte_carlo(lat, lon, heading, wind_speed, wind_dir, t, asset_profile, n_particles=800, seed=7)
+            l2, o2 = run_monte_carlo(lat, lon, heading, wind_speed, wind_dir, t, asset_profile,
+                                      observed_speed=observed_speed, n_particles=800, seed=7)
             _, _, _, r90_t, _ = compute_datum_and_rings(l2, o2, lat)
             sens_rows.append({"Thời gian (phút)": round(t), "Bán kính 90% (m)": round(r90_t)})
         sens_df = pd.DataFrame(sens_rows).drop_duplicates(subset="Thời gian (phút)").set_index("Thời gian (phút)")
@@ -576,7 +628,7 @@ else:
 
         st.markdown("""
         <div class="legend">
-        Đường xanh: hành trình đã ghi nhận — Vùng nhiệt: mật độ khả năng vị trí theo mô phỏng —
+        Đường xanh: hành trình đã ghi nhận — Cột xanh 3D: mật độ khả năng vị trí theo mô phỏng —
         Điểm đen: vị trí mất tín hiệu cuối cùng — Điểm đỏ: tâm datum dự báo —
         Vòng xanh 50% — Vòng vàng 90% — Vòng đỏ 95%
         </div>
@@ -586,6 +638,7 @@ else:
 
 Vị trí mất tín hiệu cuối cùng: {lat:.6f}, {lon:.6f}
 Đối tượng tìm kiếm: {asset_label}
+Tốc độ neo mô phỏng (trung bình dữ liệu thực tế gần nhất): {observed_speed:.1f} km/h
 Thời gian mất tín hiệu: {time_lost} phút
 Điều kiện thời tiết: gió {wind_speed} m/s hướng {wind_dir}°, nhiệt độ {temp_c}°C, {weather['description']}
 
